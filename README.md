@@ -36,7 +36,8 @@ CNPC Gecko Addon CE 是原 CNPC Gecko Addon 的社区维护延续版本。
 - 新增死亡动画菜单（最多 20 个）
 - 支持动画权重随机播放
 
-<img width="881" height="518" alt="image" src="https://github.com/user-attachments/assets/91e9f08c-c33d-4ead-a79c-b17f838298fe" />
+<img width="1718" height="518" alt="e79503095e18fa5333892bdc1660cf294361e8ba" src="https://github.com/user-attachments/assets/457ff203-3533-4046-84ab-ff678d39655f" />
+
 
 
 ---
@@ -79,9 +80,12 @@ Supported operations include:
 
 - Fixed Gecko model jitter while NPCs are loading.
 - Fixed limb flickering in heavily modded environments.
+- Fixed an issue where Gecko NPCs could become stuck in an incorrect animation state, causing abnormal model offsets and delayed idle/walk animation transitions.
 
 - 修复 NPC 加载 Gecko 模型时的抽搐问题。
 - 修复多模组环境下上下肢部件闪回问题。
+- 修复 Gecko NPC 动画状态偶尔卡死的问题，该问题会导致模型异常平移，并造成待机/移动动画切换异常或延迟恢复。
+<img width="713" height="191" alt="cb2726e8d7de77e05622f437611284c6a9fddd93" src="https://github.com/user-attachments/assets/6af73dbc-1cc8-4c8e-a9ff-94eb0286f111" />
 
 ---
 
