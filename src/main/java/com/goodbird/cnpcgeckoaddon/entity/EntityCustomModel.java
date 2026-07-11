@@ -1,6 +1,7 @@
 package com.goodbird.cnpcgeckoaddon.entity;
 
 import com.goodbird.cnpcgeckoaddon.CNPCGeckoAddon;
+import com.goodbird.cnpcgeckoaddon.mixin.IDataDisplay;
 import com.goodbird.cnpcgeckoaddon.mixin.impl.AnimControllerAccessor;
 import com.goodbird.cnpcgeckoaddon.network.NetworkWrapper;
 import com.goodbird.cnpcgeckoaddon.network.PacketInstructionKeyframe;
@@ -74,6 +75,13 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
     public int deathAnimCount = 5;
     public boolean deathAnimationPlaying = false;
 
+    // B fix: track current base animation to avoid unnecessary setAnimation calls
+    private String currentBaseAnimName = "";
+    // C fix: hysteresis for idle/walk switching
+    private int stableTicks = 0;
+    private boolean wasMoving = false;
+    private static final int STABLE_THRESHOLD = 3;
+
     private PlayState predicateMovement(AnimationState<EntityCustomModel> event) {
         AnimationController<?> controller = event.getController();
         if (manualAnimName != null) {
@@ -106,15 +114,46 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
                 return PlayState.CONTINUE;
             }
         }
-        if ((event.getLimbSwingAmount() > -0.15F && event.getLimbSwingAmount() < 0.15F) || walkAnim.isEmpty()) {
-            if (!idleAnim.isEmpty()) {
-                controller.setAnimation(RawAnimation.begin().thenLoop(idleAnim));
-            } else {
-                return PlayState.STOP;
-            }
+        // C: Debounce movement detection
+        boolean isMoving = !(event.getLimbSwingAmount() > -0.15F && event.getLimbSwingAmount() < 0.15F) && !walkAnim.isEmpty();
+        if (isMoving == wasMoving) {
+            if (stableTicks < 20) stableTicks++;
         } else {
-            controller.setAnimation(RawAnimation.begin().thenLoop(walkAnim));
+            stableTicks = 0;
+            wasMoving = isMoving;
         }
+
+        String targetAnim;
+        if (stableTicks >= STABLE_THRESHOLD) {
+            targetAnim = isMoving ? walkAnim : idleAnim;
+        } else {
+            targetAnim = currentBaseAnimName;
+        }
+
+        if (targetAnim == null || targetAnim.isEmpty()) {
+            currentBaseAnimName = "";
+            return PlayState.STOP;
+        }
+
+        // B: Only switch on actual change or when controller is stopped
+        boolean animChanged = !targetAnim.equals(currentBaseAnimName);
+        boolean stopped = controller.getAnimationState() == AnimationController.State.STOPPED;
+
+        if (animChanged || stopped) {
+            currentBaseAnimName = targetAnim;
+            if (stopped) {
+                controller.forceAnimationReset();
+            }
+            // Use 0 transition for base anim to avoid GeckoLib queue starvation
+            int configuredTransition = 10;
+            if (owner != null) {
+                configuredTransition = ((IDataDisplay) owner.display).getCustomModelData().getTransitionLengthTicks();
+            }
+            controller.transitionLength(0);
+            controller.setAnimation(RawAnimation.begin().thenLoop(targetAnim));
+            controller.transitionLength(configuredTransition);
+        }
+
         return PlayState.CONTINUE;
     }
 
