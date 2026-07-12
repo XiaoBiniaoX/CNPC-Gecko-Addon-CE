@@ -48,7 +48,7 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
     public ItemStack leftHeldItem;
     public String headBoneName = "head";
     private EntityDimensions dims;
-    public int size = 5;
+    public float size = 5.0f;
     public EntityNPCInterface owner;
     public static final int MAX_ATTACKS = 20;
     public String[] attackAnimNames = new String[MAX_ATTACKS];
