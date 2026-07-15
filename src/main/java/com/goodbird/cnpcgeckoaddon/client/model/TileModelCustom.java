@@ -1,40 +1,38 @@
 package com.goodbird.cnpcgeckoaddon.client.model;
 
-
-import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
 import com.goodbird.cnpcgeckoaddon.tile.TileEntityCustomModel;
-import net.minecraft.resources.ResourceLocation;
-import software.bernie.geckolib.cache.GeckoLibCache;
-import software.bernie.geckolib.model.GeoModel;
+import net.minecraft.util.ResourceLocation;
+import software.bernie.geckolib3.model.AnimatedGeoModel;
+import software.bernie.geckolib3.resource.GeckoLibCache;
 
-public class TileModelCustom extends GeoModel<TileEntityCustomModel> {
+public class TileModelCustom extends AnimatedGeoModel<TileEntityCustomModel> {
     @Override
-    public ResourceLocation getAnimationResource(TileEntityCustomModel animatable) {
-        if(!GeckoLibCache.getBakedAnimations().containsKey(animatable.animResLoc)){
+    public ResourceLocation getAnimationFileLocation(TileEntityCustomModel entity) {
+        if(!GeckoLibCache.getInstance().getAnimations().containsKey(entity.animResLoc)){
             return new ResourceLocation("cnpcgeckoaddon","animations/none.animations.json");
         }
-        return animatable.animResLoc;
+        return entity.animResLoc;
     }
 
     @Override
-    public ResourceLocation getModelResource(TileEntityCustomModel animatable) {
-        if(!GeckoLibCache.getBakedModels().containsKey(animatable.modelResLoc)){
+    public ResourceLocation getModelLocation(TileEntityCustomModel animatable) {
+        if(!GeckoLibCache.getInstance().getGeoModels().containsKey(animatable.modelResLoc)){
             return new ResourceLocation("cnpcgeckoaddon","geo/modelnotfound.geo.json");
         }
-        if(!GeckoLibCache.getBakedAnimations().containsKey(animatable.animResLoc)){
+        if(!GeckoLibCache.getInstance().getAnimations().containsKey(animatable.animResLoc)){
             return new ResourceLocation("cnpcgeckoaddon","geo/animfilenotfound.geo.json");
         }
         return animatable.modelResLoc;
     }
 
     @Override
-    public ResourceLocation getTextureResource(TileEntityCustomModel animatable) {
-        if(!GeckoLibCache.getBakedModels().containsKey(animatable.modelResLoc)){
+    public ResourceLocation getTextureLocation(TileEntityCustomModel entity) {
+        if(!GeckoLibCache.getInstance().getGeoModels().containsKey(entity.modelResLoc)){
             return new ResourceLocation("cnpcgeckoaddon","textures/model/alphabet.png");
         }
-        if(!GeckoLibCache.getBakedAnimations().containsKey(animatable.animResLoc)){
+        if(!GeckoLibCache.getInstance().getAnimations().containsKey(entity.animResLoc)){
             return new ResourceLocation("cnpcgeckoaddon","textures/model/alphabet.png");
         }
-        return animatable.textureResLoc;
+        return entity.textureResLoc;
     }
 }

@@ -1,64 +1,55 @@
 package com.goodbird.cnpcgeckoaddon.client.model;
 
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
-import com.goodbird.cnpcgeckoaddon.mixin.impl.GeoModelAccessor;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.util.Mth;
-import software.bernie.geckolib.cache.GeckoLibCache;
-import software.bernie.geckolib.constant.DataTickets;
-import software.bernie.geckolib.core.animatable.model.CoreGeoBone;
-import software.bernie.geckolib.core.animation.AnimationState;
-import software.bernie.geckolib.model.GeoModel;
-import software.bernie.geckolib.model.data.EntityModelData;
+import net.minecraft.util.ResourceLocation;
+import software.bernie.geckolib3.core.event.predicate.AnimationEvent;
+import software.bernie.geckolib3.core.processor.IBone;
+import software.bernie.geckolib3.model.AnimatedGeoModel;
+import software.bernie.geckolib3.model.provider.data.EntityModelData;
+import software.bernie.geckolib3.resource.GeckoLibCache;
 
-public class ModelCustom extends GeoModel<EntityCustomModel> {
-
+public class ModelCustom extends AnimatedGeoModel<EntityCustomModel> {
     @Override
-    public ResourceLocation getAnimationResource(EntityCustomModel animatable) {
-        if(!GeckoLibCache.getBakedAnimations().containsKey(animatable.animResLoc)){
+    public ResourceLocation getAnimationFileLocation(EntityCustomModel entity) {
+        if(!GeckoLibCache.getInstance().getAnimations().containsKey(entity.animResLoc)){
             return new ResourceLocation("cnpcgeckoaddon","animations/none.animations.json");
         }
-        return animatable.animResLoc;
+        return entity.animResLoc;
     }
 
     @Override
-    public ResourceLocation getModelResource(EntityCustomModel animatable) {
-        if(!GeckoLibCache.getBakedModels().containsKey(animatable.modelResLoc)){
+    public ResourceLocation getModelLocation(EntityCustomModel entity) {
+        if(!GeckoLibCache.getInstance().getGeoModels().containsKey(entity.modelResLoc)){
             return new ResourceLocation("cnpcgeckoaddon","geo/modelnotfound.geo.json");
         }
-        if(!GeckoLibCache.getBakedAnimations().containsKey(animatable.animResLoc)){
+        if(!GeckoLibCache.getInstance().getAnimations().containsKey(entity.animResLoc)){
             return new ResourceLocation("cnpcgeckoaddon","geo/animfilenotfound.geo.json");
         }
-        return animatable.modelResLoc;
+        return entity.modelResLoc;
     }
 
     @Override
-    public ResourceLocation getTextureResource(EntityCustomModel animatable) {
-        if(!GeckoLibCache.getBakedModels().containsKey(animatable.modelResLoc)){
+    public ResourceLocation getTextureLocation(EntityCustomModel entity) {
+        if(!GeckoLibCache.getInstance().getGeoModels().containsKey(entity.modelResLoc)){
             return new ResourceLocation("cnpcgeckoaddon","textures/model/alphabet.png");
         }
-        if(!GeckoLibCache.getBakedAnimations().containsKey(animatable.animResLoc)){
+        if(!GeckoLibCache.getInstance().getAnimations().containsKey(entity.animResLoc)){
             return new ResourceLocation("cnpcgeckoaddon","textures/model/alphabet.png");
         }
-        return animatable.textureResLoc;
+        return entity.textureResLoc;
     }
 
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     @Override
-    public void handleAnimations(EntityCustomModel animatable, long instanceId, AnimationState<EntityCustomModel> animationState) {
-        super.handleAnimations(animatable, instanceId, animationState);
-        ((GeoModelAccessor) this).setLastRenderedInstance(-1L);
-    }
-
-    @Override
-    public void setCustomAnimations(EntityCustomModel animatable, long instanceId, AnimationState<EntityCustomModel> animationState) {
-        super.setCustomAnimations(animatable, instanceId, animationState);
-        CoreGeoBone head = getAnimationProcessor().getBone(animatable.headBoneName);
-
-        if (head != null) {
-            EntityModelData entityData = animationState.getData(DataTickets.ENTITY_MODEL_DATA);
-
-            head.setRotX(entityData.headPitch() * Mth.DEG_TO_RAD);
-            head.setRotY(entityData.netHeadYaw() * Mth.DEG_TO_RAD);
+    public void setLivingAnimations(EntityCustomModel entity, Integer uniqueID, AnimationEvent animationEvent) {
+        super.setLivingAnimations(entity, uniqueID, animationEvent); //We call the super-function
+        IBone head = this.getAnimationProcessor().getBone(entity.headBoneName); //Then we take the head bone
+        if(head!=null) {
+            //We get the model data for an entity
+            EntityModelData extraData = (EntityModelData) animationEvent.getExtraDataOfType(EntityModelData.class).get(0);
+            //And we set the head bone rotation to the interpolated pitch and yaw rotations of an entity
+            head.setRotationX((extraData.headPitch) * ((float) Math.PI / 180F));
+            head.setRotationY((extraData.netHeadYaw) * ((float) Math.PI / 180F));
         }
     }
 }

@@ -1,0 +1,18 @@
+[
+  {
+    "modid": "cnpcgeckoaddon",
+    "name": "CNPC-Gecko-Addon-CE-1.12.2-Forge",
+    "description": "",
+    "version": "${version}",
+    "mcversion": "${mcversion}",
+    "url": "",
+    "updateUrl": "",
+    "authorList": [
+      "Goodbird"
+    ],
+    "credits": "",
+    "logoFile": "",
+    "screenshots": [],
+    "dependencies": []
+  }
+]

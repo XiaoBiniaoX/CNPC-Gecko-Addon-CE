@@ -1,62 +1,62 @@
 package com.goodbird.cnpcgeckoaddon.client.gui;
 
 import com.goodbird.cnpcgeckoaddon.data.CustomModelData;
-import com.goodbird.cnpcgeckoaddon.mixin.IDataDisplay;
+import com.goodbird.cnpcgeckoaddon.data.CustomModelDataProvider;
+import com.goodbird.cnpcgeckoaddon.data.ICustomModelData;
 import com.goodbird.cnpcgeckoaddon.utils.FloatTextFieldUtils;
-import net.minecraft.network.chat.Component;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.resources.I18n;
+import noppes.npcs.client.NoppesUtil;
 import noppes.npcs.client.gui.util.*;
 import noppes.npcs.entity.EntityNPCInterface;
-import noppes.npcs.shared.client.gui.components.GuiButtonNop;
-import noppes.npcs.shared.client.gui.components.GuiButtonYesNo;
-import noppes.npcs.shared.client.gui.components.GuiLabel;
-import noppes.npcs.shared.client.gui.components.GuiTextFieldNop;
-import noppes.npcs.shared.client.gui.listeners.ITextfieldListener;
 
-public class SubGuiModelExtras extends GuiNPCInterface implements ITextfieldListener {
-    public SubGuiModelExtras(EntityNPCInterface npc){
+public class SubGuiModelExtras extends SubGuiInterface implements ITextfieldListener, ISubGuiListener {
+    public SubGuiModelExtras(GuiScreen parent, EntityNPCInterface npc){
         this.npc = npc;
+        this.parent = parent;
         closeOnEsc = true;
     }
 
     @Override
-    public void init() {
-        super.init();
+    public void initGui() {
+        super.initGui();
         int y = guiTop + 44;
-
-        addLabel(new GuiLabel(1, Component.translatable("cnpcgeckoaddon.gui.head_bone").getString(), guiLeft - 85, y + 5,0xffffff));
-        addTextField(new GuiTextFieldNop(1,this, guiLeft + 50, y, 200, 20, getModelData(npc).getHeadBoneName()));
+        addLabel(new GuiNpcLabel(1, I18n.format("cnpcgeckoaddon.gui.head_bone"), guiLeft - 85, y + 5,0xffffff));
+        addTextField(new GuiNpcTextField(1,this, fontRenderer, guiLeft + 50, y, 200, 20, getModelData(npc).getHeadBoneName()));
         y+=23;
 
-        addLabel(new GuiLabel(2, Component.translatable("cnpcgeckoaddon.gui.transition_length").getString(), guiLeft - 85, y + 5,0xffffff));
-        GuiTextFieldNop transitionLength = new GuiTextFieldNop(2,this, guiLeft + 50, y,
+        addLabel(new GuiNpcLabel(2, I18n.format("cnpcgeckoaddon.gui.transition_length"), guiLeft - 85, y + 5,0xffffff));
+        GuiNpcTextField transitionLength = new GuiNpcTextField(2,this, fontRenderer, guiLeft + 50, y,
                 200, 20, ""+getModelData(npc).getTransitionLengthTicks());
         transitionLength.setNumbersOnly();
         transitionLength.setMinMaxDefault(0, Integer.MAX_VALUE, getModelData(npc).getTransitionLengthTicks());
         addTextField(transitionLength);
         y+=23;
 
-        addLabel(new GuiLabel(3, Component.translatable("cnpcgeckoaddon.gui.hitbox_width").getString(), guiLeft - 85, y + 5,0xffffff));
-        addTextField(new GuiTextFieldNop(3,this, guiLeft + 50, y, 200, 20, ""+getModelData(npc).getWidth()));
+        addLabel(new GuiNpcLabel(3, I18n.format("cnpcgeckoaddon.gui.hitbox_width"), guiLeft - 85, y + 5,0xffffff));
+        addTextField(new GuiNpcTextField(3,this, fontRenderer, guiLeft + 50, y, 200, 20, ""+getModelData(npc).getWidth()));
         y+=23;
 
-        addLabel(new GuiLabel(4, Component.translatable("cnpcgeckoaddon.gui.hitbox_height").getString(), guiLeft - 85, y + 5,0xffffff));
-        addTextField(new GuiTextFieldNop(4,this, guiLeft + 50, y, 200, 20, ""+getModelData(npc).getHeight()));
+        addLabel(new GuiNpcLabel(4, I18n.format("cnpcgeckoaddon.gui.hitbox_height"), guiLeft - 85, y + 5,0xffffff));
+        addTextField(new GuiNpcTextField(4,this, fontRenderer, guiLeft + 50, y, 200, 20, ""+getModelData(npc).getHeight()));
         y+=23;
 
-        addLabel(new GuiLabel(5, Component.translatable("cnpcgeckoaddon.gui.hurt_tint").getString(), guiLeft - 85, y + 5,0xffffff));
-        addButton(new GuiButtonYesNo(this, 5, guiLeft + 50, y, 200, 20, getModelData(npc).isHurtTintEnabled()));
+        addLabel(new GuiNpcLabel(5, I18n.format("cnpcgeckoaddon.gui.hurt_tint"), guiLeft - 85, y + 5,0xffffff));
+        addButton(new GuiNpcButtonYesNo(5, guiLeft + 50, y, 200, 20, getModelData(npc).isHurtTintEnabled()));
 
-        addButton(new GuiButtonNop(this, 670, width - 22, 2, 20, 20, "X"));
+        addButton(new GuiNpcButton(670, width - 22, 2, 20, 20, "X"));
     }
 
-    public CustomModelData getModelData(EntityNPCInterface npc){
-        return ((IDataDisplay)npc.display).getCustomModelData();
+    public ICustomModelData getModelData(EntityNPCInterface npc){
+        return npc.getCapability(CustomModelDataProvider.DATA_CAP, null);
     }
 
     @Override
-    public void buttonEvent(GuiButtonNop button) {
+    protected void actionPerformed(GuiButton button) {
+        super.actionPerformed(button);
         if(button.id == 5){
-            getModelData(npc).setHurtTintEnabled(((GuiButtonYesNo)button).getBoolean());
+            getModelData(npc).setEnableHurtTint(((GuiNpcButtonYesNo)button).getBoolean());
         }
         if(button.id == 670){
             close();
@@ -64,9 +64,9 @@ public class SubGuiModelExtras extends GuiNPCInterface implements ITextfieldList
     }
 
     @Override
-    public void unFocused(GuiTextFieldNop textfield) {
+    public void unFocused(GuiNpcTextField textfield) {
         if(textfield.id == 1){
-            getModelData(npc).setHeadBoneName(textfield.getValue());
+            getModelData(npc).setHeadBoneName(textfield.getText());
         }
         if(textfield.id == 2){
             getModelData(npc).setTransitionLengthTicks(textfield.getInteger());
@@ -79,5 +79,16 @@ public class SubGuiModelExtras extends GuiNPCInterface implements ITextfieldList
             FloatTextFieldUtils.performFloatChecks(0, Float.MAX_VALUE, getModelData(npc).getHeight(), textfield);
             getModelData(npc).setHeight(FloatTextFieldUtils.getFloat(textfield));
         }
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        NoppesUtil.openGUI(this.player,parent);
+    }
+
+    @Override
+    public void subGuiClosed(SubGuiInterface subGuiInterface) {
+        initGui();
     }
 }
