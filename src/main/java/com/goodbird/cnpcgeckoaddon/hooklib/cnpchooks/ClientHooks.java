@@ -10,11 +10,14 @@ import com.goodbird.cnpcgeckoaddon.hooklib.asm.ReturnCondition;
 import com.goodbird.cnpcgeckoaddon.tile.TileEntityCustomModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.renderer.RenderItem;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import noppes.npcs.CustomItems;
@@ -27,8 +30,10 @@ import noppes.npcs.client.renderer.RenderCustomNpc;
 import noppes.npcs.client.renderer.blocks.BlockScriptedRenderer;
 import noppes.npcs.entity.EntityCustomNpc;
 import noppes.npcs.entity.EntityNPCInterface;
+import noppes.npcs.items.ItemScripted;
 import org.lwjgl.opengl.GL11;
 import software.bernie.geckolib3.core.IAnimatable;
+import software.bernie.geckolib3.core.builder.AnimationBuilder;
 import software.bernie.geckolib3.resource.GeckoLibCache;
 
 import java.util.Vector;
@@ -136,5 +141,92 @@ public class ClientHooks {
         } else {
             return held.getItem() == CustomItems.wand || held.getItem() == CustomItems.scripter;
         }
+    }
+
+    // ---- ItemScripted rendering (ported from 1.20.1) ----
+
+    private static TileEntityCustomModel cachedTile = null;
+    private static String cachedConfigKey = "";
+    private static String lastPlayedAnim = "";
+    private static long lastPlayedTick = 0;
+
+    @Hook(targetMethod = "renderItem", returnCondition = ReturnCondition.ON_TRUE)
+    @SideOnly(Side.CLIENT)
+    public static boolean renderGeckoItem(RenderItem renderer, ItemStack stack, net.minecraft.client.renderer.block.model.IBakedModel model) {
+        if (!(stack.getItem() instanceof ItemScripted)) return false;
+        NBTTagCompound tag = stack.getTagCompound();
+        if (tag == null || !tag.hasKey("geckoData", 10)) return false;
+        NBTTagCompound geckoData = tag.getCompoundTag("geckoData");
+        String modelStr = geckoData.getString("model");
+        if (modelStr.isEmpty()) return false;
+
+        World world = Minecraft.getMinecraft().world;
+        if (world == null) return false;
+
+        String animFile = geckoData.getString("animFile");
+        String idleAnim = geckoData.getString("idleAnim");
+        String texStr = geckoData.getString("texture");
+
+        String configKey = modelStr + "|" + texStr + "|" + animFile + "|" + idleAnim;
+
+        if (cachedTile == null || !configKey.equals(cachedConfigKey)) {
+            cachedTile = new TileEntityCustomModel();
+            cachedTile.setWorld(world);
+            cachedConfigKey = configKey;
+        }
+
+        cachedTile.modelResLoc = new ResourceLocation(modelStr);
+        cachedTile.animResLoc = animFile.isEmpty()
+            ? new ResourceLocation("cnpcgeckoaddon", "animations/none.animations.json")
+            : new ResourceLocation(animFile);
+        cachedTile.idleAnimName = idleAnim;
+
+        if (!texStr.isEmpty()) {
+            cachedTile.textureResLoc = new ResourceLocation(texStr);
+        } else {
+            cachedTile.textureResLoc = new ResourceLocation("cnpcgeckoaddon", "textures/model/alphabet.png");
+        }
+
+        String playAnim = geckoData.getString("playAnim");
+        if (!playAnim.isEmpty()) {
+            long playTick = geckoData.getLong("playAnimTick");
+            if (!playAnim.equals(lastPlayedAnim) || playTick != lastPlayedTick) {
+                cachedTile.manualAnim = new AnimationBuilder().playOnce(playAnim);
+                lastPlayedAnim = playAnim;
+                lastPlayedTick = playTick;
+            }
+        }
+
+        GL11.glPushMatrix();
+        GL11.glTranslated(-0.5, -0.5, -0.5);
+
+        float ox = geckoData.getFloat("displayOffsetX");
+        float oy = geckoData.getFloat("displayOffsetY");
+        if (ox != 0 || oy != 0) {
+            GL11.glTranslatef(ox / 16.0f, -oy / 16.0f, 0);
+        }
+        float sx = geckoData.getFloat("itemDisplayScaleX");
+        float sy = geckoData.getFloat("itemDisplayScaleY");
+        float sz = geckoData.getFloat("itemDisplayScaleZ");
+        if (sx == 0) sx = 1;
+        if (sy == 0) sy = 1;
+        if (sz == 0) sz = 1;
+        GL11.glScalef(sx, sy, sz);
+
+        float scale = geckoData.getFloat("modelScale");
+        if (scale == 0) scale = 1;
+        GL11.glScalef(scale, scale, scale);
+
+        float rotX = geckoData.getFloat("rotationX");
+        float rotY = geckoData.getFloat("rotationY");
+        float rotZ = geckoData.getFloat("rotationZ");
+        if (rotX != 0) GL11.glRotatef(rotX, 1, 0, 0);
+        if (rotY != 0) GL11.glRotatef(rotY, 0, 1, 0);
+        if (rotZ != 0) GL11.glRotatef(rotZ, 0, 0, 1);
+
+        TileEntityRendererDispatcher.instance.render(cachedTile, 0, 0, 0, Minecraft.getMinecraft().getRenderPartialTicks());
+        GL11.glPopMatrix();
+
+        return true;
     }
 }

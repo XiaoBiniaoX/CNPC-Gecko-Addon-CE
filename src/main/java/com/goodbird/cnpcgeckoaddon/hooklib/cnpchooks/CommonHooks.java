@@ -13,11 +13,13 @@ import com.goodbird.cnpcgeckoaddon.tile.TileEntityCustomModel;
 import com.goodbird.cnpcgeckoaddon.utils.NpcTextureUtils;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ResourceLocation;
 import noppes.npcs.api.block.IBlockScripted;
 import noppes.npcs.api.entity.IPlayer;
 import noppes.npcs.api.wrapper.BlockScriptedWrapper;
+import noppes.npcs.api.wrapper.ItemScriptedWrapper;
 import noppes.npcs.api.wrapper.NPCWrapper;
 import noppes.npcs.api.wrapper.WrapperNpcAPI;
 import noppes.npcs.blocks.tiles.TileScripted;
@@ -382,5 +384,101 @@ public class CommonHooks {
     @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
     public static void syncAnimationsForAll(BlockScriptedWrapper scriptedBlock, AnimationBuilder builder) {
         NetworkWrapper.sendToAll(new CPacketSyncTileManualAnim(scriptedBlock.getMCTileEntity(), builder));
+    }
+
+    // ---- Block methods matching 1.20.1 naming (String-based) ----
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void syncAnimForPlayer(BlockScriptedWrapper scriptedBlock, String animName, IPlayer player) {
+        NetworkWrapper.sendToPlayer(new CPacketSyncTileManualAnim(scriptedBlock.getMCTileEntity(), new AnimationBuilder().playOnce(animName)), player.getMCEntity());
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void syncAnimForAll(BlockScriptedWrapper scriptedBlock, String animName) {
+        NetworkWrapper.sendToAll(new CPacketSyncTileManualAnim(scriptedBlock.getMCTileEntity(), new AnimationBuilder().playOnce(animName)));
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void playAnimation(BlockScriptedWrapper scriptedBlock, String animName) {
+        NetworkWrapper.sendToAll(new CPacketSyncTileManualAnim(scriptedBlock.getMCTileEntity(), new AnimationBuilder().playOnce(animName)));
+    }
+
+    // ---- ItemScriptedWrapper methods (ported from 1.20.1) ----
+
+    private static NBTTagCompound getGeckoData(ItemScriptedWrapper item) {
+        ItemStack stack = item.getMCItemStack();
+        NBTTagCompound tag = stack.getTagCompound();
+        if (tag == null) {
+            tag = new NBTTagCompound();
+            stack.setTagCompound(tag);
+        }
+        if (!tag.hasKey("geckoData", 10)) {
+            tag.setTag("geckoData", new NBTTagCompound());
+        }
+        return tag.getCompoundTag("geckoData");
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void setGeckoModel(ItemScriptedWrapper item, String model) {
+        getGeckoData(item).setString("model", model);
+        item.updateClient = true;
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void setGeckoTexture(ItemScriptedWrapper item, String texture) {
+        getGeckoData(item).setString("texture", texture);
+        item.updateClient = true;
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void setGeckoAnimationFile(ItemScriptedWrapper item, String animation) {
+        getGeckoData(item).setString("animFile", animation);
+        item.updateClient = true;
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void setGeckoIdleAnimation(ItemScriptedWrapper item, String animation) {
+        getGeckoData(item).setString("idleAnim", animation);
+        item.updateClient = true;
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void playAnimation(ItemScriptedWrapper item, String animName) {
+        NBTTagCompound data = getGeckoData(item);
+        data.setString("playAnim", animName);
+        data.setLong("playAnimTick", System.currentTimeMillis());
+        item.updateClient = true;
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void setGeckoItemDisplaySize(ItemScriptedWrapper item, float x, float y, float z) {
+        NBTTagCompound data = getGeckoData(item);
+        data.setFloat("itemDisplayScaleX", x);
+        data.setFloat("itemDisplayScaleY", y);
+        data.setFloat("itemDisplayScaleZ", z);
+        item.updateClient = true;
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void setGeckoItemDisplayOffset(ItemScriptedWrapper item, float x, float y) {
+        NBTTagCompound data = getGeckoData(item);
+        data.setFloat("displayOffsetX", x);
+        data.setFloat("displayOffsetY", y);
+        item.updateClient = true;
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void setGeckoRotation(ItemScriptedWrapper item, float x, float y, float z) {
+        NBTTagCompound data = getGeckoData(item);
+        data.setFloat("rotationX", x);
+        data.setFloat("rotationY", y);
+        data.setFloat("rotationZ", z);
+        item.updateClient = true;
+    }
+
+    @Hook(createMethod = true, returnCondition = ReturnCondition.ALWAYS)
+    public static void setGeckoScale(ItemScriptedWrapper item, float scale) {
+        getGeckoData(item).setFloat("modelScale", scale);
+        item.updateClient = true;
     }
 }
