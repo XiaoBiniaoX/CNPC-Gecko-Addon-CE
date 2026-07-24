@@ -20,6 +20,8 @@
   "cnpcgeckoaddon.gui.hurt_tint": "Enable Hurt Tint",
   "cnpcgeckoaddon.gui.col_hp": "HP%",
   "cnpcgeckoaddon.gui.death_duration": "Dur(s)",
+  "cnpcgeckoaddon.gui.col_sound": "Sound",
+  "cnpcgeckoaddon.gui.sound": "Sound...",
   "display.model": "Model",
   "display.hitbox": "Hitbox"
 }

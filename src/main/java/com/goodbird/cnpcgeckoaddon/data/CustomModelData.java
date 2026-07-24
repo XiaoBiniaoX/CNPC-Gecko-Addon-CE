@@ -26,10 +26,12 @@ public class CustomModelData {
     private String[] attackAnimNames = new String[MAX_ATTACKS];
     private int[] attackWeights = new int[MAX_ATTACKS];
     private float[] attackFrames = new float[MAX_ATTACKS];
+    private String[] attackSoundNames = new String[MAX_ATTACKS];
     private int attackCount = 5;
 
     private String[] hurtAnimNames = new String[MAX_HURTS];
     private int[] hurtWeights = new int[MAX_HURTS];
+    private String[] hurtSoundNames = new String[MAX_HURTS];
     private int hurtAnimCount = 5;
 
     private String[] deathAnimNames = new String[MAX_DEATHS];
@@ -43,10 +45,12 @@ public class CustomModelData {
             attackAnimNames[i] = "";
             attackWeights[i] = 1;
             attackFrames[i] = 0f;
+            attackSoundNames[i] = "";
         }
         for (int i = 0; i < MAX_HURTS; i++) {
             hurtAnimNames[i] = "";
             hurtWeights[i] = 1;
+            hurtSoundNames[i] = "";
         }
         for (int i = 0; i < MAX_DEATHS; i++) {
             deathAnimNames[i] = "";
@@ -78,6 +82,12 @@ public class CustomModelData {
         ListTag framesList = new ListTag();
         for (int i = 0; i < attackCount; i++) framesList.add(FloatTag.valueOf(attackFrames[i]));
         nbttagcompound.put("AttackFrames", framesList);
+        ListTag attackSoundsList = new ListTag();
+        for (int i = 0; i < attackCount; i++) {
+            String snd = attackSoundNames[i];
+            attackSoundsList.add(StringTag.valueOf(snd != null ? snd : ""));
+        }
+        nbttagcompound.put("AttackSoundNames", attackSoundsList);
 
         nbttagcompound.putInt("HurtAnimCount", hurtAnimCount);
         ListTag hurtNamesList = new ListTag();
@@ -86,6 +96,12 @@ public class CustomModelData {
         ListTag hurtWeightsList = new ListTag();
         for (int i = 0; i < hurtAnimCount; i++) hurtWeightsList.add(IntTag.valueOf(hurtWeights[i]));
         nbttagcompound.put("HurtWeights", hurtWeightsList);
+        ListTag hurtSoundsList = new ListTag();
+        for (int i = 0; i < hurtAnimCount; i++) {
+            String snd = hurtSoundNames[i];
+            hurtSoundsList.add(StringTag.valueOf(snd != null ? snd : ""));
+        }
+        nbttagcompound.put("HurtSoundNames", hurtSoundsList);
 
         nbttagcompound.putInt("DeathAnimCount", deathAnimCount);
         ListTag deathNamesList = new ListTag();
@@ -150,6 +166,11 @@ public class CustomModelData {
                 for (int i = 0; i < Math.min(framesList.size(), attackCount); i++)
                     attackFrames[i] = framesList.getFloat(i);
             }
+            if (nbttagcompound.contains("AttackSoundNames")) {
+                ListTag list = nbttagcompound.getList("AttackSoundNames", 8);
+                for (int i = 0; i < Math.min(list.size(), attackCount); i++)
+                    attackSoundNames[i] = list.getString(i);
+            }
 
             if (nbttagcompound.contains("HurtAnimCount")) {
                 hurtAnimCount = Math.min(nbttagcompound.getInt("HurtAnimCount"), MAX_HURTS);
@@ -163,6 +184,11 @@ public class CustomModelData {
                     ListTag list = nbttagcompound.getList("HurtWeights", 3);
                     for (int i = 0; i < Math.min(list.size(), hurtAnimCount); i++)
                         hurtWeights[i] = list.getInt(i);
+                }
+                if (nbttagcompound.contains("HurtSoundNames")) {
+                    ListTag list = nbttagcompound.getList("HurtSoundNames", 8);
+                    for (int i = 0; i < Math.min(list.size(), hurtAnimCount); i++)
+                        hurtSoundNames[i] = list.getString(i);
                 }
             }
 
@@ -223,6 +249,7 @@ public class CustomModelData {
     public void setAttackWeights(int[] weights) { this.attackWeights = weights; }
     public float[] getAttackFrames() { return attackFrames; }
     public void setAttackFrames(float[] frames) { this.attackFrames = frames; }
+    public String[] getAttackSoundNames() { return attackSoundNames; }
     public int getAttackCount() { return attackCount; }
     public void setAttackCount(int count) { this.attackCount = Math.min(count, MAX_ATTACKS); }
     public void addAttack() {
@@ -230,6 +257,7 @@ public class CustomModelData {
             attackAnimNames[attackCount] = "";
             attackWeights[attackCount] = 1;
             attackFrames[attackCount] = 0f;
+            attackSoundNames[attackCount] = "";
             attackCount++;
         }
     }
@@ -239,21 +267,25 @@ public class CustomModelData {
             attackAnimNames[i] = attackAnimNames[i + 1];
             attackWeights[i] = attackWeights[i + 1];
             attackFrames[i] = attackFrames[i + 1];
+            attackSoundNames[i] = attackSoundNames[i + 1];
         }
         attackCount--;
         attackAnimNames[attackCount] = "";
         attackWeights[attackCount] = 1;
         attackFrames[attackCount] = 0f;
+        attackSoundNames[attackCount] = "";
     }
 
     public String[] getHurtAnimNames() { return hurtAnimNames; }
     public int[] getHurtWeights() { return hurtWeights; }
+    public String[] getHurtSoundNames() { return hurtSoundNames; }
     public int getHurtAnimCount() { return hurtAnimCount; }
     public void setHurtAnimCount(int count) { this.hurtAnimCount = Math.min(count, MAX_HURTS); }
     public void addHurtAnim() {
         if (hurtAnimCount < MAX_HURTS) {
             hurtAnimNames[hurtAnimCount] = "";
             hurtWeights[hurtAnimCount] = 1;
+            hurtSoundNames[hurtAnimCount] = "";
             hurtAnimCount++;
         }
     }
@@ -262,10 +294,12 @@ public class CustomModelData {
         for (int i = index; i < hurtAnimCount - 1; i++) {
             hurtAnimNames[i] = hurtAnimNames[i + 1];
             hurtWeights[i] = hurtWeights[i + 1];
+            hurtSoundNames[i] = hurtSoundNames[i + 1];
         }
         hurtAnimCount--;
         hurtAnimNames[hurtAnimCount] = "";
         hurtWeights[hurtAnimCount] = 1;
+        hurtSoundNames[hurtAnimCount] = "";
     }
 
     public String[] getDeathAnimNames() { return deathAnimNames; }

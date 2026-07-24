@@ -39,8 +39,25 @@ public class MixinEntityNPCAttack {
             cir.setReturnValue(false);
             cir.cancel();
         } else {
+            // frame==0: damage applies immediately; sound plays with the hit (not with anim)
             em.attackDamageDealt = true;
+            playAttackSound(self, em.currentAttackSound);
         }
+    }
+
+    @Unique
+    private void playAttackSound(EntityNPCInterface self, String soundId) {
+        if (soundId == null || soundId.isEmpty()) return;
+        if (self.level().isClientSide) return;
+        net.minecraft.resources.ResourceLocation loc;
+        try {
+            loc = new net.minecraft.resources.ResourceLocation(soundId);
+        } catch (Exception e) {
+            return;
+        }
+        self.level().playSound(null, self.blockPosition(),
+                net.minecraft.sounds.SoundEvent.createVariableRangeEvent(loc),
+                net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
     }
 
     @Unique

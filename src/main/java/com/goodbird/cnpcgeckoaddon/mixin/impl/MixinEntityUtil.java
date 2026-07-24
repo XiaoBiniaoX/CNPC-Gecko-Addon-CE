@@ -35,9 +35,11 @@ public class MixinEntityUtil {
             System.arraycopy(display.getCustomModelData().getAttackAnimNames(), 0, modelEntity.attackAnimNames, 0, modelEntity.MAX_ATTACKS);
             System.arraycopy(display.getCustomModelData().getAttackWeights(), 0, modelEntity.attackWeights, 0, modelEntity.MAX_ATTACKS);
             System.arraycopy(display.getCustomModelData().getAttackFrames(), 0, modelEntity.attackFrames, 0, modelEntity.MAX_ATTACKS);
+            System.arraycopy(display.getCustomModelData().getAttackSoundNames(), 0, modelEntity.attackSoundNames, 0, modelEntity.MAX_ATTACKS);
             modelEntity.attackCount = display.getCustomModelData().getAttackCount();
             System.arraycopy(display.getCustomModelData().getHurtAnimNames(), 0, modelEntity.hurtAnimNames, 0, modelEntity.MAX_HURTS);
             System.arraycopy(display.getCustomModelData().getHurtWeights(), 0, modelEntity.hurtWeights, 0, modelEntity.MAX_HURTS);
+            System.arraycopy(display.getCustomModelData().getHurtSoundNames(), 0, modelEntity.hurtSoundNames, 0, modelEntity.MAX_HURTS);
             modelEntity.hurtAnimCount = display.getCustomModelData().getHurtAnimCount();
             System.arraycopy(display.getCustomModelData().getDeathAnimNames(), 0, modelEntity.deathAnimNames, 0, modelEntity.MAX_DEATHS);
             System.arraycopy(display.getCustomModelData().getDeathWeights(), 0, modelEntity.deathWeights, 0, modelEntity.MAX_DEATHS);

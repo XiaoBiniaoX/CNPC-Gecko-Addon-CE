@@ -6,17 +6,20 @@ import com.goodbird.cnpcgeckoaddon.utils.FloatTextFieldUtils;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import noppes.npcs.client.gui.select.GuiSoundSelection;
 import noppes.npcs.client.gui.util.GuiNPCInterface;
 import noppes.npcs.entity.EntityNPCInterface;
 import noppes.npcs.shared.client.gui.components.GuiButtonNop;
 import noppes.npcs.shared.client.gui.components.GuiLabel;
 import noppes.npcs.shared.client.gui.components.GuiTextFieldNop;
+import noppes.npcs.shared.client.gui.listeners.IGuiInterface;
 import noppes.npcs.shared.client.gui.listeners.ITextfieldListener;
 import com.goodbird.cnpcgeckoaddon.utils.AnimationFileUtil;
 import software.bernie.geckolib.cache.GeckoLibCache;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldListener {
 
@@ -41,6 +44,7 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
         GuiTextFieldNop weightField;
         GuiTextFieldNop extraField;
         GuiButtonNop deleteBtn;
+        GuiButtonNop soundBtn;
     }
 
     @Override
@@ -65,9 +69,9 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
         int tabStartX = guiLeft - 85 + PANEL_WIDTH + 6;
         int tabStartY = panelY + 4 + HEADER_HEIGHT;
 
-        addButton(new GuiButtonNop(this, 5, tabStartX, tabStartY, tabBtnW, tabBtnH, getTabLabel(5)));
-        addButton(new GuiButtonNop(this, 6, tabStartX, tabStartY + (tabBtnH + tabGap), tabBtnW, tabBtnH, getTabLabel(6)));
-        addButton(new GuiButtonNop(this, 7, tabStartX, tabStartY + 2 * (tabBtnH + tabGap), tabBtnW, tabBtnH, getTabLabel(7)));
+        addButton(new TabButton(this, 5, tabStartX, tabStartY, tabBtnW, tabBtnH, getTabLabel(5), openSection == 1));
+        addButton(new TabButton(this, 6, tabStartX, tabStartY + (tabBtnH + tabGap), tabBtnW, tabBtnH, getTabLabel(6), openSection == 2));
+        addButton(new TabButton(this, 7, tabStartX, tabStartY + 2 * (tabBtnH + tabGap), tabBtnW, tabBtnH, getTabLabel(7), openSection == 3));
 
         switch (openSection) {
             case 1: createAttackSection(); break;
@@ -78,8 +82,7 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
 
     private String getTabLabel(int tabId) {
         int sec = tabId - 4;
-        String base = Component.translatable(sec == 1 ? "cnpcgeckoaddon.gui.attack" : sec == 2 ? "cnpcgeckoaddon.gui.hurt" : "cnpcgeckoaddon.gui.death").getString();
-        return openSection == sec ? "[" + base + "]" : base;
+        return Component.translatable(sec == 1 ? "cnpcgeckoaddon.gui.attack" : sec == 2 ? "cnpcgeckoaddon.gui.hurt" : "cnpcgeckoaddon.gui.death").getString();
     }
 
     private void createAttackSection() {
@@ -92,23 +95,28 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
             row.index = i;
             int rowY = panelY + 4 + HEADER_HEIGHT + i * ROW_HEIGHT;
 
-            row.nameField = new GuiTextFieldNop(100 + i, this, guiLeft - 35, rowY, 85, 20, getModelData(npc).getAttackAnimNames()[i]);
+            row.nameField = new GuiTextFieldNop(100 + i, this, guiLeft - 35, rowY, 76, 18, getModelData(npc).getAttackAnimNames()[i]);
             addTextField(row.nameField);
 
-            row.selectBtn = new GuiButtonNop(this, 400 + i, guiLeft + 53, rowY, 40, 20, "mco.template.button.select");
+            row.selectBtn = new GuiButtonNop(this, 400 + i, guiLeft + 44, rowY, 36, 18, "mco.template.button.select");
             addButton(row.selectBtn);
 
-            GuiTextFieldNop wf = new GuiTextFieldNop(200 + i, this, guiLeft + 96, rowY, 30, 20, "" + getModelData(npc).getAttackWeights()[i]);
+            GuiTextFieldNop wf = new GuiTextFieldNop(200 + i, this, guiLeft + 83, rowY, 26, 18, "" + getModelData(npc).getAttackWeights()[i]);
             wf.setNumbersOnly();
             wf.setMinMaxDefault(0, 100, 1);
             addTextField(wf);
             row.weightField = wf;
 
-            row.extraField = new GuiTextFieldNop(300 + i, this, guiLeft + 129, rowY, 55, 20, String.format("%.2f", getModelData(npc).getAttackFrames()[i]));
+            row.extraField = new GuiTextFieldNop(300 + i, this, guiLeft + 112, rowY, 48, 18, String.format("%.2f", getModelData(npc).getAttackFrames()[i]));
             addTextField(row.extraField);
 
-            row.deleteBtn = new GuiButtonNop(this, 500 + i, guiLeft + 188, rowY, 18, 20, "X");
+            row.deleteBtn = new GuiButtonNop(this, 500 + i, guiLeft + 163, rowY, 18, 18, "X");
             addButton(row.deleteBtn);
+
+            String snd = getModelData(npc).getAttackSoundNames()[i];
+            String sndLabel = (snd != null && !snd.isEmpty()) ? "\u266B" : "\u266A";
+            row.soundBtn = new GuiButtonNop(this, 700 + i, guiLeft + 184, rowY, 36, 18, sndLabel);
+            addButton(row.soundBtn);
 
             rows.add(row);
         }
@@ -131,13 +139,13 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
             row.index = i;
             int rowY = panelY + 4 + HEADER_HEIGHT + i * ROW_HEIGHT;
 
-            row.nameField = new GuiTextFieldNop(1000 + i, this, guiLeft - 35, rowY, 85, 20, getModelData(npc).getHurtAnimNames()[i]);
+            row.nameField = new GuiTextFieldNop(1000 + i, this, guiLeft - 35, rowY, 124, 18, getModelData(npc).getHurtAnimNames()[i]);
             addTextField(row.nameField);
 
-            row.selectBtn = new GuiButtonNop(this, 1200 + i, guiLeft + 53, rowY, 40, 20, "mco.template.button.select");
+            row.selectBtn = new GuiButtonNop(this, 1200 + i, guiLeft + 92, rowY, 36, 18, "mco.template.button.select");
             addButton(row.selectBtn);
 
-            GuiTextFieldNop wf = new GuiTextFieldNop(1100 + i, this, guiLeft + 96, rowY, 60, 20, "" + getModelData(npc).getHurtWeights()[i]);
+            GuiTextFieldNop wf = new GuiTextFieldNop(1100 + i, this, guiLeft + 131, rowY, 36, 18, "" + getModelData(npc).getHurtWeights()[i]);
             wf.setNumbersOnly();
             wf.setMinMaxDefault(0, 100, 1);
             addTextField(wf);
@@ -145,8 +153,13 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
 
             row.extraField = null;
 
-            row.deleteBtn = new GuiButtonNop(this, 1300 + i, guiLeft + 188, rowY, 18, 20, "X");
+            row.deleteBtn = new GuiButtonNop(this, 1300 + i, guiLeft + 170, rowY, 18, 18, "X");
             addButton(row.deleteBtn);
+
+            String snd = getModelData(npc).getHurtSoundNames()[i];
+            String sndLabel = (snd != null && !snd.isEmpty()) ? "\u266B" : "\u266A";
+            row.soundBtn = new GuiButtonNop(this, 1500 + i, guiLeft + 191, rowY, 36, 18, sndLabel);
+            addButton(row.soundBtn);
 
             rows.add(row);
         }
@@ -215,6 +228,7 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
             row.weightField.setY(widgetY);
             if (row.extraField != null) row.extraField.setY(widgetY);
             row.deleteBtn.setY(widgetY);
+            if (row.soundBtn != null) row.soundBtn.setY(widgetY);
         }
     }
 
@@ -262,14 +276,13 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
 
         graphics.drawString(font, Component.translatable(sectionLabelKey).getString(), panelX + 4, colHeaderY, 0xFFFFFF);
         graphics.drawString(font, Component.translatable("cnpcgeckoaddon.gui.col_name").getString(), guiLeft - 35, colHeaderY, 0x888888);
-        if (openSection == 1 || openSection == 2) {
-            graphics.drawString(font, Component.translatable("cnpcgeckoaddon.gui.col_weight").getString(), guiLeft + 96, colHeaderY, 0x888888);
+        if (openSection == 1) {
+            graphics.drawString(font, Component.translatable("cnpcgeckoaddon.gui.col_weight").getString(), guiLeft + 83, colHeaderY, 0x888888);
+            graphics.drawString(font, Component.translatable("cnpcgeckoaddon.gui.col_frame").getString(), guiLeft + 112, colHeaderY, 0x888888);
+        } else if (openSection == 2) {
+            graphics.drawString(font, Component.translatable("cnpcgeckoaddon.gui.col_weight").getString(), guiLeft + 131, colHeaderY, 0x888888);
         } else if (openSection == 3) {
             graphics.drawString(font, Component.translatable("cnpcgeckoaddon.gui.col_weight").getString(), guiLeft + 53, colHeaderY, 0x888888);
-        }
-        if (openSection == 1) {
-            graphics.drawString(font, Component.translatable("cnpcgeckoaddon.gui.col_frame").getString(), guiLeft + 129, colHeaderY, 0x888888);
-        } else if (openSection == 3) {
             graphics.drawString(font, Component.translatable("cnpcgeckoaddon.gui.col_hp").getString(), guiLeft + 86, colHeaderY, 0x888888);
             graphics.drawString(font, Component.translatable("cnpcgeckoaddon.gui.death_duration").getString(), guiLeft + 124, colHeaderY, 0x888888);
         }
@@ -441,6 +454,15 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
             return;
         }
 
+        if (button.id >= 700 && button.id < 700 + CustomModelData.MAX_ATTACKS) {
+            int idx = button.id - 700;
+            if (idx < getModelData(npc).getAttackCount()) {
+                openSoundPicker(getModelData(npc).getAttackSoundNames()[idx],
+                    (result) -> getModelData(npc).getAttackSoundNames()[idx] = result);
+            }
+            return;
+        }
+
         if (button.id >= 1200 && button.id < 1200 + CustomModelData.MAX_HURTS) {
             int idx = button.id - 1200;
             if (idx < getModelData(npc).getHurtAnimCount()) {
@@ -460,6 +482,15 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
             if (idx < getModelData(npc).getHurtAnimCount()) {
                 getModelData(npc).removeHurtAnim(idx);
                 init();
+            }
+            return;
+        }
+
+        if (button.id >= 1500 && button.id < 1500 + CustomModelData.MAX_HURTS) {
+            int idx = button.id - 1500;
+            if (idx < getModelData(npc).getHurtAnimCount()) {
+                openSoundPicker(getModelData(npc).getHurtSoundNames()[idx],
+                    (result) -> getModelData(npc).getHurtSoundNames()[idx] = result);
             }
             return;
         }
@@ -602,5 +633,47 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
     public boolean isValidAnimation(String name) {
         if (name == null || name.isEmpty()) return true;
         return AnimationFileUtil.getAnimationList(getModelData(npc).getAnimFile()).contains(name);
+    }
+
+    private void openSoundPicker(String currentSound, Consumer<String> callback) {
+        setSubGui(new GuiSoundSelectionWrapper(currentSound, callback));
+    }
+
+    private static class GuiSoundSelectionWrapper extends GuiSoundSelection {
+        private final Consumer<String> callback;
+
+        public GuiSoundSelectionWrapper(String currentSound, Consumer<String> callback) {
+            super(currentSound);
+            this.callback = callback;
+        }
+
+        @Override
+        public void close() {
+            if (selectedResource != null && callback != null) {
+                callback.accept(selectedResource.toString());
+            }
+            super.close();
+        }
+    }
+
+    private static class TabButton extends GuiButtonNop {
+        public boolean selected;
+
+        TabButton(IGuiInterface gui, int id, int x, int y, int w, int h, String label, boolean selected) {
+            super(gui, id, x, y, w, h, label);
+            this.selected = selected;
+        }
+
+        @Override
+        public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
+            if (selected) {
+                boolean old = this.active;
+                this.active = false;
+                super.renderWidget(graphics, mouseX, mouseY, partialTicks);
+                this.active = old;
+            } else {
+                super.renderWidget(graphics, mouseX, mouseY, partialTicks);
+            }
+        }
     }
 }

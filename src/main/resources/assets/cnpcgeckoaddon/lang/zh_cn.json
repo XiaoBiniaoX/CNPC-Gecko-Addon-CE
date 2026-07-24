@@ -20,6 +20,8 @@
   "cnpcgeckoaddon.gui.hurt_tint": "启用受伤红色闪烁",
   "cnpcgeckoaddon.gui.col_hp": "血量%",
   "cnpcgeckoaddon.gui.death_duration": "时长(秒)",
+  "cnpcgeckoaddon.gui.col_sound": "音效",
+  "cnpcgeckoaddon.gui.sound": "音效...",
   "display.model": "模型",
   "display.hitbox": "碰撞箱"
 }

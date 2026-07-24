@@ -54,6 +54,7 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
     public String[] attackAnimNames = new String[MAX_ATTACKS];
     public int[] attackWeights = new int[MAX_ATTACKS];
     public float[] attackFrames = new float[MAX_ATTACKS];
+    public String[] attackSoundNames = new String[MAX_ATTACKS];
     public int attackCount = 5;
     public Entity attackingTarget = null;
     public String currentAttackAnim = null;
@@ -62,10 +63,12 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
     public boolean attackDamageDealt = false;
     public boolean frameAttackInProgress = false;
     public boolean hurtAnimationPlaying = false;
+    public String currentAttackSound = null;
 
     public static final int MAX_HURTS = 20;
     public String[] hurtAnimNames = new String[MAX_HURTS];
     public int[] hurtWeights = new int[MAX_HURTS];
+    public String[] hurtSoundNames = new String[MAX_HURTS];
     public int hurtAnimCount = 5;
     public static final int MAX_DEATHS = 20;
     public String[] deathAnimNames = new String[MAX_DEATHS];
@@ -162,10 +165,12 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
             attackAnimNames[i] = "";
             attackWeights[i] = 1;
             attackFrames[i] = 0f;
+            attackSoundNames[i] = "";
         }
         for (int i = 0; i < MAX_HURTS; i++) {
             hurtAnimNames[i] = "";
             hurtWeights[i] = 1;
+            hurtSoundNames[i] = "";
         }
         for (int i = 0; i < MAX_DEATHS; i++) {
             deathAnimNames[i] = "";
@@ -217,6 +222,13 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
         this.currentAttackFrame = frameThreshold;
         this.attackingTarget = target;
         this.attackDamageDealt = false;
+        this.currentAttackSound = null;
+        for (int i = 0; i < attackCount; i++) {
+            if (animName.equals(attackAnimNames[i])) {
+                this.currentAttackSound = attackSoundNames[i];
+                break;
+            }
+        }
         this.manualAnimName = animName;
         this.manualAnimInstant = false;
         if (!level().isClientSide && owner != null) {
@@ -231,6 +243,7 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
         attackAnimStartTick = 0;
         attackDamageDealt = false;
         frameAttackInProgress = false;
+        currentAttackSound = null;
     }
 
     public void playDeathAnimation(String deathAnimName) {

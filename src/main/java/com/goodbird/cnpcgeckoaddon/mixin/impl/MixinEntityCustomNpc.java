@@ -2,6 +2,9 @@ package com.goodbird.cnpcgeckoaddon.mixin.impl;
 
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
 import com.goodbird.cnpcgeckoaddon.mixin.IDataDisplay;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
@@ -11,6 +14,7 @@ import noppes.npcs.entity.EntityCustomNpc;
 import noppes.npcs.entity.EntityNPCInterface;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -43,6 +47,7 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
             modelEntity.hurtTime = 0;
         }
 
+        // Hurt animation only (sound is handled by HurtSoundEvents, independent of anim)
         if (this.hurtTime > 0 && !modelEntity.hurtAnimationPlaying) {
             if (modelEntity.currentAttackAnim == null) {
                 String hurtAnim = modelEntity.pickWeightedHurtAnim();
@@ -71,6 +76,7 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
         }
 
         if (!level().isClientSide) {
+            // Attack sound only tied to damage frame delay
             if (modelEntity.currentAttackAnim != null && modelEntity.attackingTarget != null && !modelEntity.attackDamageDealt && modelEntity.currentAttackFrame > 0) {
                 int elapsedTicks = tickCount - modelEntity.attackAnimStartTick;
                 int targetTicks = (int)(modelEntity.currentAttackFrame * 20.0f);
@@ -79,15 +85,31 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
                     this.doHurtTarget(modelEntity.attackingTarget);
                     modelEntity.frameAttackInProgress = false;
                     modelEntity.attackDamageDealt = true;
+                    playGeckoSound(modelEntity.currentAttackSound);
                 }
             }
             int animTimeout = 200;
             if (modelEntity.currentAttackAnim != null && (tickCount - modelEntity.attackAnimStartTick > animTimeout)) {
                 if (!modelEntity.attackDamageDealt && modelEntity.attackingTarget != null && modelEntity.attackingTarget.isAlive()) {
                     this.doHurtTarget(modelEntity.attackingTarget);
+                    playGeckoSound(modelEntity.currentAttackSound);
                 }
                 modelEntity.resetAttackState();
             }
         }
+    }
+
+    @Unique
+    private void playGeckoSound(String soundId) {
+        if (soundId == null || soundId.isEmpty()) return;
+        if (level().isClientSide) return;
+        ResourceLocation sndLoc;
+        try {
+            sndLoc = new ResourceLocation(soundId);
+        } catch (Exception e) {
+            return;
+        }
+        SoundEvent event = SoundEvent.createVariableRangeEvent(sndLoc);
+        this.level().playSound(null, this.blockPosition(), event, SoundSource.PLAYERS, 1.0f, 1.0f);
     }
 }
