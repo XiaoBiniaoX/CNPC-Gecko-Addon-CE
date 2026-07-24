@@ -47,6 +47,7 @@ public interface ICustomModelData {
     String[] getAttackAnimNames();
     int[] getAttackWeights();
     float[] getAttackFrames();
+    String[] getAttackSoundNames();
     void addAttack();
     void removeAttack(int index);
 
@@ -54,6 +55,7 @@ public interface ICustomModelData {
     int getHurtAnimCount();
     String[] getHurtAnimNames();
     int[] getHurtWeights();
+    String[] getHurtSoundNames();
     void addHurtAnim();
     void removeHurtAnim(int index);
 

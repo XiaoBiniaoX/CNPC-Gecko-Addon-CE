@@ -27,10 +27,12 @@ public class CustomModelData implements ICustomModelData {
     private String[] attackAnimNames = new String[MAX_ATTACKS];
     private int[] attackWeights = new int[MAX_ATTACKS];
     private float[] attackFrames = new float[MAX_ATTACKS];
+    private String[] attackSoundNames = new String[MAX_ATTACKS];
     private int attackCount = 0;
 
     private String[] hurtAnimNames = new String[MAX_HURTS];
     private int[] hurtWeights = new int[MAX_HURTS];
+    private String[] hurtSoundNames = new String[MAX_HURTS];
     private int hurtAnimCount = 0;
 
     private String[] deathAnimNames = new String[MAX_DEATHS];
@@ -44,10 +46,12 @@ public class CustomModelData implements ICustomModelData {
             attackAnimNames[i] = "";
             attackWeights[i] = 1;
             attackFrames[i] = 0f;
+            attackSoundNames[i] = "";
         }
         for (int i = 0; i < MAX_HURTS; i++) {
             hurtAnimNames[i] = "";
             hurtWeights[i] = 1;
+            hurtSoundNames[i] = "";
         }
         for (int i = 0; i < MAX_DEATHS; i++) {
             deathAnimNames[i] = "";
@@ -82,6 +86,12 @@ public class CustomModelData implements ICustomModelData {
         NBTTagList attackFramesList = new NBTTagList();
         for (int i = 0; i < writeAttackCount; i++) attackFramesList.appendTag(new NBTTagFloat(attackFrames[i]));
         nbttagcompound.setTag("AttackFrames", attackFramesList);
+        NBTTagList attackSoundsList = new NBTTagList();
+        for (int i = 0; i < writeAttackCount; i++) {
+            String snd = attackSoundNames[i];
+            attackSoundsList.appendTag(new NBTTagString(snd != null ? snd : ""));
+        }
+        nbttagcompound.setTag("AttackSoundNames", attackSoundsList);
 
         int writeHurtCount = Math.min(hurtAnimCount, MAX_HURTS);
         nbttagcompound.setInteger("HurtAnimCount", writeHurtCount);
@@ -91,6 +101,12 @@ public class CustomModelData implements ICustomModelData {
         NBTTagList hurtWeightsList = new NBTTagList();
         for (int i = 0; i < writeHurtCount; i++) hurtWeightsList.appendTag(new NBTTagInt(hurtWeights[i]));
         nbttagcompound.setTag("HurtWeights", hurtWeightsList);
+        NBTTagList hurtSoundsList = new NBTTagList();
+        for (int i = 0; i < writeHurtCount; i++) {
+            String snd = hurtSoundNames[i];
+            hurtSoundsList.appendTag(new NBTTagString(snd != null ? snd : ""));
+        }
+        nbttagcompound.setTag("HurtSoundNames", hurtSoundsList);
 
         int writeDeathCount = Math.min(deathAnimCount, MAX_DEATHS);
         nbttagcompound.setInteger("DeathAnimCount", writeDeathCount);
@@ -152,6 +168,11 @@ public class CustomModelData implements ICustomModelData {
                     for (int i = 0; i < Math.min(list.tagCount(), attackCount); i++)
                         attackFrames[i] = ((NBTTagFloat) list.get(i)).getFloat();
                 }
+                if (nbttagcompound.hasKey("AttackSoundNames")) {
+                    NBTTagList list = nbttagcompound.getTagList("AttackSoundNames", 8);
+                    for (int i = 0; i < Math.min(list.tagCount(), attackCount); i++)
+                        attackSoundNames[i] = list.getStringTagAt(i);
+                }
             }
 
             if (nbttagcompound.hasKey("HurtAnimCount")) {
@@ -165,6 +186,11 @@ public class CustomModelData implements ICustomModelData {
                     NBTTagList list = nbttagcompound.getTagList("HurtWeights", 3);
                     for (int i = 0; i < Math.min(list.tagCount(), hurtAnimCount); i++)
                         hurtWeights[i] = ((NBTTagInt) list.get(i)).getInt();
+                }
+                if (nbttagcompound.hasKey("HurtSoundNames")) {
+                    NBTTagList list = nbttagcompound.getTagList("HurtSoundNames", 8);
+                    for (int i = 0; i < Math.min(list.tagCount(), hurtAnimCount); i++)
+                        hurtSoundNames[i] = list.getStringTagAt(i);
                 }
             }
 
@@ -234,11 +260,13 @@ public class CustomModelData implements ICustomModelData {
     public String[] getAttackAnimNames() { return attackAnimNames; }
     public int[] getAttackWeights() { return attackWeights; }
     public float[] getAttackFrames() { return attackFrames; }
+    public String[] getAttackSoundNames() { return attackSoundNames; }
     public void addAttack() {
         if (attackCount < MAX_ATTACKS) {
             attackAnimNames[attackCount] = "";
             attackWeights[attackCount] = 1;
             attackFrames[attackCount] = 0f;
+            attackSoundNames[attackCount] = "";
             attackCount++;
         }
     }
@@ -248,20 +276,24 @@ public class CustomModelData implements ICustomModelData {
             attackAnimNames[i] = attackAnimNames[i + 1];
             attackWeights[i] = attackWeights[i + 1];
             attackFrames[i] = attackFrames[i + 1];
+            attackSoundNames[i] = attackSoundNames[i + 1];
         }
         attackCount--;
         attackAnimNames[attackCount] = "";
         attackWeights[attackCount] = 1;
         attackFrames[attackCount] = 0f;
+        attackSoundNames[attackCount] = "";
     }
 
     public int getHurtAnimCount() { return hurtAnimCount; }
     public String[] getHurtAnimNames() { return hurtAnimNames; }
     public int[] getHurtWeights() { return hurtWeights; }
+    public String[] getHurtSoundNames() { return hurtSoundNames; }
     public void addHurtAnim() {
         if (hurtAnimCount < MAX_HURTS) {
             hurtAnimNames[hurtAnimCount] = "";
             hurtWeights[hurtAnimCount] = 1;
+            hurtSoundNames[hurtAnimCount] = "";
             hurtAnimCount++;
         }
     }
@@ -270,10 +302,12 @@ public class CustomModelData implements ICustomModelData {
         for (int i = index; i < hurtAnimCount - 1; i++) {
             hurtAnimNames[i] = hurtAnimNames[i + 1];
             hurtWeights[i] = hurtWeights[i + 1];
+            hurtSoundNames[i] = hurtSoundNames[i + 1];
         }
         hurtAnimCount--;
         hurtAnimNames[hurtAnimCount] = "";
         hurtWeights[hurtAnimCount] = 1;
+        hurtSoundNames[hurtAnimCount] = "";
     }
 
     public int getDeathAnimCount() { return deathAnimCount; }

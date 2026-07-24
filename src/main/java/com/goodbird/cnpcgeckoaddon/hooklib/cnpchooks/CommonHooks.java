@@ -16,6 +16,9 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
+import noppes.npcs.Server;
+import noppes.npcs.constants.EnumPacketClient;
 import noppes.npcs.api.block.IBlockScripted;
 import noppes.npcs.api.entity.IPlayer;
 import noppes.npcs.api.wrapper.BlockScriptedWrapper;
@@ -48,7 +51,6 @@ public class CommonHooks {
                 Entity entity = ((EntityCustomNpc) data.npc).modelData.getEntity(data.npc);
                 if (entity instanceof EntityCustomModel) {
                     EntityUtil.Copy(data.npc, (EntityLivingBase) entity);
-                    System.out.println("[CNPC-Gecko] readToNBT sync: modelEntity.attackCount=" + ((EntityCustomModel)entity).attackCount + ", data.getAttackCount()=" + modeldata.getAttackCount());
                 }
             }
         }
@@ -119,82 +121,85 @@ public class CommonHooks {
             if (modelEntity.currentAttackAnim != null && modelEntity.attackingTarget != null && !modelEntity.attackDamageDealt && modelEntity.currentAttackFrame > 0) {
                 int elapsedTicks = npc.ticksExisted - modelEntity.attackAnimStartTick;
                 int targetTicks = (int)(modelEntity.currentAttackFrame * 20.0f);
-                System.out.println("[CNPC-Gecko] onUpdate delay check: elapsed=" + elapsedTicks + "/" + targetTicks + " frame=" + modelEntity.currentAttackFrame);
                 if (elapsedTicks >= targetTicks && targetTicks > 0) {
-                    System.out.println("[CNPC-Gecko] onUpdate DELAY HIT - applying damage");
                     modelEntity.delayedAttackPending = false;
                     if (modelEntity.attackingTarget.isEntityAlive()) {
                         modelEntity.frameAttackInProgress = true;
                         npc.attackEntityAsMob(modelEntity.attackingTarget);
+                        modelEntity.frameAttackInProgress = false;
                     }
                     modelEntity.attackDamageDealt = true;
+                    playGeckoSound(npc, modelEntity.currentAttackSound);
                     modelEntity.resetAttackState();
                 }
             }
             int animTimeout = 200;
             if (modelEntity.currentAttackAnim != null && (npc.ticksExisted - modelEntity.attackAnimStartTick > animTimeout)) {
-                System.out.println("[CNPC-Gecko] onUpdate TIMEOUT - applying damage");
                 if (!modelEntity.attackDamageDealt && modelEntity.attackingTarget != null && modelEntity.attackingTarget.isEntityAlive()) {
                     modelEntity.frameAttackInProgress = true;
                     npc.attackEntityAsMob(modelEntity.attackingTarget);
+                    modelEntity.frameAttackInProgress = false;
+                    playGeckoSound(npc, modelEntity.currentAttackSound);
                 }
                 modelEntity.resetAttackState();
             }
         }
     }
 
+    /** Same path as CNPC DataAdvanced.playSound (string id via PLAY_SOUND packet). */
+    public static void playGeckoSound(Entity entity, String soundId) {
+        if (soundId == null || soundId.isEmpty()) return;
+        if (entity.world == null || entity.world.isRemote) return;
+        BlockPos pos = entity.getPosition();
+        Server.sendRangedData(entity, 16, EnumPacketClient.PLAY_SOUND,
+                soundId, pos.getX(), pos.getY(), pos.getZ(), 1.0f, 1.0f);
+    }
+
     @Hook(returnCondition = ReturnCondition.ON_TRUE, targetMethod = "attackEntityAsMob")
     public static boolean onAttackEntityAsMob(EntityNPCInterface npc, Entity target) {
-        System.out.println("[CNPC-Gecko] onAttackEntityAsMob ENTER");
         if (!(npc instanceof EntityCustomNpc) || target == null) {
-            System.out.println("[CNPC-Gecko] EXIT: not EntityCustomNpc or target=null");
             return false;
         }
         ICustomModelData data = npc.getCapability(CustomModelDataProvider.DATA_CAP, null);
         if (data == null) {
-            System.out.println("[CNPC-Gecko] EXIT: data=null");
             return false;
         }
         Entity entity = ((EntityCustomNpc)npc).modelData.getEntity(npc);
         if (!(entity instanceof EntityCustomModel)) {
-            System.out.println("[CNPC-Gecko] EXIT: not EntityCustomModel");
             return false;
         }
         EntityCustomModel em = (EntityCustomModel) entity;
-        System.out.println("[CNPC-Gecko] DEBUG modelEntity.attackCount=" + em.attackCount + ", data.getAttackCount()=" + (data != null ? data.getAttackCount() : "null"));
         if (em.frameAttackInProgress) {
-            System.out.println("[CNPC-Gecko] EXIT: frameAttackInProgress=true");
             return false;
         }
         if (em.delayedAttackPending) {
-            System.out.println("[CNPC-Gecko] EXIT: delayedAttackPending=true");
             return true;
         }
         em.attackCount = data.getAttackCount();
         em.attackAnimNames = data.getAttackAnimNames().clone();
         em.attackWeights = data.getAttackWeights().clone();
         em.attackFrames = data.getAttackFrames().clone();
+        em.attackSoundNames = data.getAttackSoundNames().clone();
         if (em.attackCount <= 0 && !data.getMeleeAttackAnim().isEmpty()) {
             em.attackCount = 1;
             em.attackAnimNames = new String[]{data.getMeleeAttackAnim()};
             em.attackWeights = new int[]{1};
             em.attackFrames = new float[]{0f};
+            em.attackSoundNames = new String[]{""};
         }
-        System.out.println("[CNPC-Gecko] onAttack sync: attackCount=" + em.attackCount + " frame=" + (em.attackCount > 0 ? em.attackFrames[0] : "N/A"));
         if (em.attackAnimNames == null || em.attackCount <= 0) {
-            System.out.println("[CNPC-Gecko] EXIT: no attack anims (count=" + (em.attackAnimNames==null?"null":em.attackCount) + ")");
             return false;
         }
 
         String selectedAnim = null;
         float frame = 0;
+        String selectedSound = null;
         int totalWeight = 0;
         for (int i = 0; i < em.attackCount; i++) {
             if (em.attackAnimNames[i] != null && !em.attackAnimNames[i].isEmpty()) {
                 totalWeight += Math.max(em.attackWeights[i], 0);
             }
         }
-        System.out.println("[CNPC-Gecko] totalWeight=" + totalWeight + " attackCount=" + em.attackCount);
         if (totalWeight > 0) {
             int rand = npc.getRNG().nextInt(totalWeight);
             int cumulative = 0;
@@ -204,13 +209,14 @@ public class CommonHooks {
                     if (rand < cumulative) {
                         selectedAnim = em.attackAnimNames[i];
                         frame = em.attackFrames[i];
+                        selectedSound = (em.attackSoundNames != null && i < em.attackSoundNames.length)
+                                ? em.attackSoundNames[i] : null;
                         break;
                     }
                 }
             }
         }
         if (selectedAnim == null || selectedAnim.isEmpty()) {
-            System.out.println("[CNPC-Gecko] EXIT: no anim selected");
             return false;
         }
 
@@ -219,17 +225,18 @@ public class CommonHooks {
         em.attackingTarget = target;
         em.attackAnimStartTick = npc.ticksExisted;
         em.attackDamageDealt = false;
+        em.currentAttackSound = selectedSound;
 
         if (!npc.world.isRemote) {
             NetworkWrapper.sendToAll(new PacketSyncAnimation(npc, new AnimationBuilder().playOnce(selectedAnim)));
         }
 
-        System.out.println("[CNPC-Gecko] frame=" + frame + " -> " + (frame > 0 ? "DELAY (return true)" : "NO DELAY (return false)"));
         if (frame > 0) {
             em.delayedAttackPending = true;
             return true;
         } else {
             em.attackDamageDealt = true;
+            playGeckoSound(npc, em.currentAttackSound);
             return false;
         }
     }
@@ -255,30 +262,36 @@ public class CommonHooks {
                 modelEntity.attackAnimNames = data.getAttackAnimNames().clone();
                 modelEntity.attackWeights = data.getAttackWeights().clone();
                 modelEntity.attackFrames = data.getAttackFrames().clone();
+                modelEntity.attackSoundNames = data.getAttackSoundNames().clone();
             } else if (!data.getMeleeAttackAnim().isEmpty()) {
                 modelEntity.attackCount = 1;
                 modelEntity.attackAnimNames = new String[]{data.getMeleeAttackAnim()};
                 modelEntity.attackWeights = new int[]{1};
                 modelEntity.attackFrames = new float[]{0f};
+                modelEntity.attackSoundNames = new String[]{""};
             } else {
                 modelEntity.attackCount = 0;
                 modelEntity.attackAnimNames = new String[0];
                 modelEntity.attackWeights = new int[0];
                 modelEntity.attackFrames = new float[0];
+                modelEntity.attackSoundNames = new String[0];
             }
 
             if (data.getHurtAnimCount() > 0) {
                 modelEntity.hurtAnimCount = data.getHurtAnimCount();
                 modelEntity.hurtAnimNames = data.getHurtAnimNames().clone();
                 modelEntity.hurtWeights = data.getHurtWeights().clone();
+                modelEntity.hurtSoundNames = data.getHurtSoundNames().clone();
             } else if (!data.getHurtAnim().isEmpty()) {
                 modelEntity.hurtAnimCount = 1;
                 modelEntity.hurtAnimNames = new String[]{data.getHurtAnim()};
                 modelEntity.hurtWeights = new int[]{1};
+                modelEntity.hurtSoundNames = new String[]{""};
             } else {
                 modelEntity.hurtAnimCount = 0;
                 modelEntity.hurtAnimNames = new String[0];
                 modelEntity.hurtWeights = new int[0];
+                modelEntity.hurtSoundNames = new String[0];
             }
 
             if (data.getDeathAnimCount() > 0) {
@@ -304,6 +317,7 @@ public class CommonHooks {
                 modelEntity.leftHeldItem = npc.inventory.getLeftHand().getMCItemStack();
             }
             modelEntity.headBoneName = data.getHeadBoneName();
+            modelEntity.transitionLengthTicks = data.getTransitionLengthTicks();
             AnimationData animationData = modelEntity.getFactory().getOrCreateAnimationData(modelEntity.getUniqueID().hashCode());
             for(AnimationController controller : animationData.getAnimationControllers().values()){
                 controller.transitionLengthTicks = data.getTransitionLengthTicks();

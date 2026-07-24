@@ -26,5 +26,6 @@ cnpcgeckoaddon.gui.add=Add
 cnpcgeckoaddon.gui.col_name=Name
 cnpcgeckoaddon.gui.col_weight=Wt
 cnpcgeckoaddon.gui.col_frame=Start(s)
+cnpcgeckoaddon.gui.col_sound=Snd
 cnpcgeckoaddon.gui.col_hp=HP
 cnpcgeckoaddon.gui.death_duration=Dur

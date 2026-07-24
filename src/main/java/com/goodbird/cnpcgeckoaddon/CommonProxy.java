@@ -6,6 +6,7 @@ import com.goodbird.cnpcgeckoaddon.data.CustomModelData;
 import com.goodbird.cnpcgeckoaddon.data.CustomModelDataStorage;
 import com.goodbird.cnpcgeckoaddon.data.ICustomModelData;
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
+import com.goodbird.cnpcgeckoaddon.event.HurtSoundEvents;
 import com.goodbird.cnpcgeckoaddon.network.NetworkWrapper;
 import com.goodbird.cnpcgeckoaddon.tile.TileEntityCustomModel;
 import net.minecraft.util.ResourceLocation;
@@ -29,6 +30,7 @@ public class CommonProxy {
         GameRegistry.registerTileEntity(TileEntityCustomModel.class, "custommodeltile");
         CapabilityManager.INSTANCE.register(ICustomModelData.class, new CustomModelDataStorage(), CustomModelData.class);
         MinecraftForge.EVENT_BUS.register(new CapabilityHandler());
+        MinecraftForge.EVENT_BUS.register(new HurtSoundEvents());
     }
 
     public World getWorldById(int id){

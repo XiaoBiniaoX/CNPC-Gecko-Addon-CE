@@ -36,15 +36,18 @@ public class EntityCustomModel extends EntityCreature implements IAnimatable, IA
     public AnimationBuilder hurtAnim = null;
     public AnimationBuilder deathAnim = null;
     public String headBoneName = "head";
+    public int transitionLengthTicks = 10;
     public ItemStack leftHeldItem;
 
     public String[] attackAnimNames = new String[0];
     public int[] attackWeights = new int[0];
     public float[] attackFrames = new float[0];
+    public String[] attackSoundNames = new String[0];
     public int attackCount = 0;
 
     public String[] hurtAnimNames = new String[0];
     public int[] hurtWeights = new int[0];
+    public String[] hurtSoundNames = new String[0];
     public int hurtAnimCount = 0;
 
     public String[] deathAnimNames = new String[0];
@@ -68,72 +71,74 @@ public class EntityCustomModel extends EntityCreature implements IAnimatable, IA
     public boolean delayedAttackPending = false;
     public float cachedDamage = 0;
     public float preAttackHealth = 0;
+    public String currentAttackSound = null;
 
     private static final Random RAND = new Random();
 
+    private void applyOneShot(AnimationController<?> controller, AnimationBuilder anim) {
+        // Instant start for combat anims (no transition lag)
+        controller.transitionLengthTicks = 0;
+        if (controller.currentAnimationBuilder != anim) {
+            controller.markNeedsReload();
+        }
+        controller.setAnimation(anim);
+    }
+
+    private void applyLoop(AnimationController<?> controller, AnimationBuilder anim, int transitionTicks) {
+        controller.transitionLengthTicks = transitionTicks;
+        controller.setAnimation(anim);
+    }
+
     private <E extends IAnimatable> PlayState predicateMovement(AnimationEvent<E> event) {
+        AnimationController<?> controller = event.getController();
         if (deathAnim != null) {
-            if (event.getController().currentAnimationBuilder == deathAnim && event.getController().getAnimationState() == AnimationState.Stopped) {
+            if (controller.currentAnimationBuilder == deathAnim && controller.getAnimationState() == AnimationState.Stopped) {
                 return PlayState.STOP;
             }
-            if (event.getController().currentAnimationBuilder != deathAnim) {
-                event.getController().markNeedsReload();
-            }
-            event.getController().setAnimation(deathAnim);
+            applyOneShot(controller, deathAnim);
             return PlayState.CONTINUE;
         }
         if (hurtAnim != null) {
-            if (event.getController().currentAnimationBuilder == hurtAnim && event.getController().getAnimationState() == AnimationState.Stopped) {
+            if (controller.currentAnimationBuilder == hurtAnim && controller.getAnimationState() == AnimationState.Stopped) {
                 hurtAnim = null;
             } else {
-                if (event.getController().currentAnimationBuilder != hurtAnim) {
-                    event.getController().markNeedsReload();
-                }
-                event.getController().setAnimation(hurtAnim);
+                applyOneShot(controller, hurtAnim);
                 return PlayState.CONTINUE;
             }
         }
         if (attackAnim != null) {
-            if (event.getController().currentAnimationBuilder == attackAnim && event.getController().getAnimationState() == AnimationState.Stopped) {
+            if (controller.currentAnimationBuilder == attackAnim && controller.getAnimationState() == AnimationState.Stopped) {
                 attackAnim = null;
             } else {
-                if (event.getController().currentAnimationBuilder != attackAnim) {
-                    event.getController().markNeedsReload();
-                }
-                event.getController().setAnimation(attackAnim);
+                applyOneShot(controller, attackAnim);
                 return PlayState.CONTINUE;
             }
         }
         if (dialogAnim != null) {
-            if (event.getController().currentAnimationBuilder == dialogAnim && event.getController().getAnimationState() == AnimationState.Stopped) {
+            if (controller.currentAnimationBuilder == dialogAnim && controller.getAnimationState() == AnimationState.Stopped) {
                 dialogAnim = null;
             } else {
-                if (event.getController().currentAnimationBuilder != dialogAnim) {
-                    event.getController().markNeedsReload();
-                }
-                event.getController().setAnimation(dialogAnim);
+                applyOneShot(controller, dialogAnim);
                 return PlayState.CONTINUE;
             }
         }
         if (manualAnim != null) {
-            if (event.getController().currentAnimationBuilder == manualAnim && event.getController().getAnimationState() == AnimationState.Stopped) {
+            if (controller.currentAnimationBuilder == manualAnim && controller.getAnimationState() == AnimationState.Stopped) {
                 manualAnim = null;
             } else {
-                if (event.getController().currentAnimationBuilder != manualAnim) {
-                    event.getController().markNeedsReload();
-                }
-                event.getController().setAnimation(manualAnim);
+                applyOneShot(controller, manualAnim);
                 return PlayState.CONTINUE;
             }
         }
+        int transition = Math.max(0, transitionLengthTicks);
         if (!event.isMoving() || walkAnimName.isEmpty()) {
             if (!idleAnimName.isEmpty()) {
-                event.getController().setAnimation(new AnimationBuilder().loop(idleAnimName));
+                applyLoop(controller, new AnimationBuilder().loop(idleAnimName), transition);
             } else {
                 return PlayState.STOP;
             }
         } else {
-            event.getController().setAnimation(new AnimationBuilder().loop(walkAnimName));
+            applyLoop(controller, new AnimationBuilder().loop(walkAnimName), transition);
         }
         return PlayState.CONTINUE;
     }
@@ -166,6 +171,7 @@ public class EntityCustomModel extends EntityCreature implements IAnimatable, IA
         delayedAttackPending = false;
         cachedDamage = 0;
         preAttackHealth = 0;
+        currentAttackSound = null;
     }
 
     public void detectAnimationEvents() {
@@ -200,7 +206,8 @@ public class EntityCustomModel extends EntityCreature implements IAnimatable, IA
             return;
         }
 
-        if (npcRef.hurtTime > 0 && prevHurtTime <= 0 && hurtAnim == null && hurtAnimCount > 0) {
+        // Fallback client edge detect (server also syncs via PacketSyncAnimation asHurt)
+        if (npcRef.hurtTime > prevHurtTime && hurtAnim == null && currentAttackAnim == null && hurtAnimCount > 0) {
             int idx = weightedRandomSelect(hurtWeights, hurtAnimCount);
             if (idx >= 0 && !hurtAnimNames[idx].isEmpty()) {
                 hurtAnim = new AnimationBuilder().playOnce(hurtAnimNames[idx]);

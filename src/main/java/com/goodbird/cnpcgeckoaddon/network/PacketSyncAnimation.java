@@ -21,12 +21,17 @@ import java.io.IOException;
 public class PacketSyncAnimation implements IMessage, IMessageHandler<PacketSyncAnimation, IMessage> {
     public AnimationBuilder builder;
     public int entityId;
+    public boolean asHurt;
     public PacketSyncAnimation(){
 
     }
     public PacketSyncAnimation(EntityNPCInterface npc, AnimationBuilder builder) {
+        this(npc, builder, false);
+    }
+    public PacketSyncAnimation(EntityNPCInterface npc, AnimationBuilder builder, boolean asHurt) {
         this.builder = builder;
         this.entityId = npc.getEntityId();
+        this.asHurt = asHurt;
     }
 
     @Override
@@ -35,6 +40,7 @@ public class PacketSyncAnimation implements IMessage, IMessageHandler<PacketSync
             writeAnimBuilder(buf, builder);
         }catch (Exception ignored){ }
         buf.writeInt(entityId);
+        buf.writeBoolean(asHurt);
     }
 
     @Override
@@ -43,6 +49,9 @@ public class PacketSyncAnimation implements IMessage, IMessageHandler<PacketSync
             builder = readAnimBuilder(buf);
         }catch (Exception ignored){ }
         entityId = buf.readInt();
+        if (buf.isReadable()) {
+            asHurt = buf.readBoolean();
+        }
     }
 
     public static void writeAnimBuilder(ByteBuf buffer, AnimationBuilder builder) throws IOException {
@@ -81,7 +90,11 @@ public class PacketSyncAnimation implements IMessage, IMessageHandler<PacketSync
         EntityCustomNpc npc = (EntityCustomNpc) entity;
         if(npc.modelData==null || !(npc.modelData.getEntity(npc) instanceof EntityCustomModel)) return null;
         EntityCustomModel entityCustomModel = (EntityCustomModel) npc.modelData.getEntity(npc);
-        entityCustomModel.manualAnim = message.builder;
+        if (message.asHurt) {
+            entityCustomModel.hurtAnim = message.builder;
+        } else {
+            entityCustomModel.manualAnim = message.builder;
+        }
         return null;
     }
 }

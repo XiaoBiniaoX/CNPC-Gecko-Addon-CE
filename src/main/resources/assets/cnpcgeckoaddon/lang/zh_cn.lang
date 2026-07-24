@@ -26,5 +26,6 @@ cnpcgeckoaddon.gui.add=添加
 cnpcgeckoaddon.gui.col_name=名称
 cnpcgeckoaddon.gui.col_weight=权重
 cnpcgeckoaddon.gui.col_frame=偏移(秒)
+cnpcgeckoaddon.gui.col_sound=音效
 cnpcgeckoaddon.gui.col_hp=HP
 cnpcgeckoaddon.gui.death_duration=时长
