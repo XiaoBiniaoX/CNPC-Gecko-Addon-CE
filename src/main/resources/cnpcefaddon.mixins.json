@@ -1,0 +1,34 @@
+{
+  "required": true,
+  "package": "com.goodbird.cnpcefaddon.mixin.impl",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "cnpcefaddon.refmap.json",
+  "mixins": [
+    "ICustomHumanoidMobPatchProvider",
+    "ICustomMobPatchProvider",
+    "MixinAttributeMap",
+    "MixinCapabilityDispatcher2",
+    "MixinCapabilityProvider",
+    "MixinDataDisplay",
+    "MixinDataDisplaySetVisible",
+    "MixinEntityLivingWrapper",
+    "MixinEntityNpcInterface",
+    "MixinEntityNPCInvisible",
+    "MixinLivingEntityHurt",
+    "MixinNPCWrapper"
+  ],
+  "client": [
+    "IMixinRenderEngine",
+    "MixinAdvanceHealthBar",
+    "MixinGuiCreationEntities",
+    "MixinLayerHeadwear",
+    "MixinLivingEntityPatch",
+    "MixinPCustomEntityRenderer",
+    "MixinPatchedLivingEntityRenderer",
+    "MixinRenderEngine",
+    "MixinRenderEngineEvents",
+    "MixinSkinnedMeshDraw",
+    "MixinTargetIndicator"
+  ],
+  "minVersion": "0.8"
+}
