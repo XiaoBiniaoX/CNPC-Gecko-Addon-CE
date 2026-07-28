@@ -35,12 +35,13 @@ public abstract class MixinRenderNPCInterface <T extends EntityNPCInterface, M e
 
     @Inject(method = "render(Lnoppes/npcs/entity/EntityNPCInterface;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",at=@At(value = "INVOKE",target = "Lnet/minecraft/client/renderer/entity/LivingEntityRenderer;render(Lnet/minecraft/world/entity/LivingEntity;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V"), cancellable = true)
     public void render(T npc, float entityYaw, float partialTicks, PoseStack matrixStack, MultiBufferSource buffer, int packedLight, CallbackInfo ci) {
-        // Don't render if NPC is dead (CNPC handles death internally, entity stays in world for respawn)
-        if (npc.getHealth() <= 0f) {
-            ci.cancel();
-            return;
-        }
         if(npc instanceof EntityCustomNpc cNpc && cNpc.modelData.getEntity(npc) instanceof EntityCustomModel modelEntity){
+            // Gecko model only: skip dead render (CNPC keeps corpse entity for respawn).
+            // Normal NPCs must keep CNPC corpse rendering.
+            if (npc.getHealth() <= 0f) {
+                ci.cancel();
+                return;
+            }
             modelEntity.owner = cNpc;
             cnpcgeckoaddon$renderGeoModel(cNpc,matrixStack,buffer,packedLight, partialTicks);
             cnpcgeckoaddon$drawNameStandalone(npc, entityYaw, partialTicks, matrixStack, buffer, packedLight);
