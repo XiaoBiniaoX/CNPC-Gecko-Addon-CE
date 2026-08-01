@@ -1,5 +1,6 @@
 package com.goodbird.cnpcgeckoaddon.mixin.impl;
 
+import com.goodbird.cnpcgeckoaddon.data.CustomModelData;
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
 import com.goodbird.cnpcgeckoaddon.mixin.IDataDisplay;
 import net.minecraft.resources.ResourceLocation;
@@ -35,13 +36,25 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
         Entity entity = this.modelData.getEntity(this);
         if (!(entity instanceof EntityCustomModel)) return;
         EntityCustomModel modelEntity = (EntityCustomModel) entity;
-        if (display.getCustomModelData().getHeight() != modelEntity.getBbHeight() || display.getCustomModelData().getWidth() != modelEntity.getBbWidth()) {
-            modelEntity.setSize(display.getCustomModelData().getWidth(), display.getCustomModelData().getHeight());
+        CustomModelData data = display.getCustomModelData();
+
+        // Keep the model entity in sync with the config every tick.
+        // Previously this only happened in EntityUtil.Copy, so after editing the GUI the
+        // NPC kept using stale animation/sound tables until it was respawned.
+        modelEntity.owner = this;
+        gecko$syncConfig(modelEntity, data);
+
+        if (data.getHeight() != modelEntity.getBbHeight() || data.getWidth() != modelEntity.getBbWidth()) {
+            modelEntity.setSize(data.getWidth(), data.getHeight());
+            // Refresh the model entity too, otherwise its bounding box never matches the
+            // config and this branch runs every tick, re-resetting the NPC hitbox
+            // continuously (which breaks collision with other NPCs).
+            modelEntity.refreshDimensions();
             this.refreshDimensions();
         }
 
         modelEntity.deathTime = this.deathTime;
-        if (display.getCustomModelData().isHurtTintEnabled()) {
+        if (data.isHurtTintEnabled()) {
             modelEntity.hurtTime = this.hurtTime;
         } else {
             modelEntity.hurtTime = 0;
@@ -51,7 +64,7 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
         if (this.hurtTime > 0 && !modelEntity.hurtAnimationPlaying) {
             if (modelEntity.currentAttackAnim == null) {
                 String hurtAnim = modelEntity.pickWeightedHurtAnim();
-                if (hurtAnim == null) hurtAnim = display.getCustomModelData().getHurtAnim();
+                if (hurtAnim == null) hurtAnim = data.getHurtAnim();
                 if (hurtAnim != null && !hurtAnim.isEmpty()) {
                     modelEntity.playHurtAnimation(hurtAnim);
                     modelEntity.hurtAnimationPlaying = true;
@@ -65,7 +78,7 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
         if (this.deathTime == 1 && !modelEntity.deathAnimationPlaying) {
             String deathAnim = modelEntity.pickWeightedDeathAnim();
             if (deathAnim == null || deathAnim.isEmpty()) {
-                deathAnim = display.getCustomModelData().getHurtAnim();
+                deathAnim = data.getHurtAnim();
             }
             if (deathAnim != null && !deathAnim.isEmpty()) {
                 modelEntity.playDeathAnimation(deathAnim);
@@ -100,15 +113,68 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
     }
 
     @Unique
+    private void gecko$syncConfig(EntityCustomModel modelEntity, CustomModelData data) {
+        ResourceLocation model = gecko$parse(data.getModel());
+        if (model != null) modelEntity.modelResLoc = model;
+        ResourceLocation animFile = gecko$parse(data.getAnimFile());
+        if (animFile != null) modelEntity.animResLoc = animFile;
+
+        modelEntity.idleAnim = gecko$orEmpty(data.getIdleAnim());
+        modelEntity.walkAnim = gecko$orEmpty(data.getWalkAnim());
+        modelEntity.attackAnim = gecko$orEmpty(data.getAttackAnim());
+        modelEntity.hurtAnim = gecko$orEmpty(data.getHurtAnim());
+        modelEntity.headBoneName = gecko$orEmpty(data.getHeadBoneName());
+        modelEntity.size = this.display.getSize();
+
+        modelEntity.attackCount = Math.min(data.getAttackCount(), CustomModelData.MAX_ATTACKS);
+        System.arraycopy(data.getAttackAnimNames(), 0, modelEntity.attackAnimNames, 0, CustomModelData.MAX_ATTACKS);
+        System.arraycopy(data.getAttackWeights(), 0, modelEntity.attackWeights, 0, CustomModelData.MAX_ATTACKS);
+        System.arraycopy(data.getAttackFrames(), 0, modelEntity.attackFrames, 0, CustomModelData.MAX_ATTACKS);
+        System.arraycopy(data.getAttackSoundNames(), 0, modelEntity.attackSoundNames, 0, CustomModelData.MAX_ATTACKS);
+
+        modelEntity.hurtAnimCount = Math.min(data.getHurtAnimCount(), CustomModelData.MAX_HURTS);
+        System.arraycopy(data.getHurtAnimNames(), 0, modelEntity.hurtAnimNames, 0, CustomModelData.MAX_HURTS);
+        System.arraycopy(data.getHurtWeights(), 0, modelEntity.hurtWeights, 0, CustomModelData.MAX_HURTS);
+        System.arraycopy(data.getHurtSoundNames(), 0, modelEntity.hurtSoundNames, 0, CustomModelData.MAX_HURTS);
+
+        modelEntity.deathAnimCount = Math.min(data.getDeathAnimCount(), CustomModelData.MAX_DEATHS);
+        System.arraycopy(data.getDeathAnimNames(), 0, modelEntity.deathAnimNames, 0, CustomModelData.MAX_DEATHS);
+        System.arraycopy(data.getDeathWeights(), 0, modelEntity.deathWeights, 0, CustomModelData.MAX_DEATHS);
+        System.arraycopy(data.getDeathHealthThresholds(), 0, modelEntity.deathHealthThresholds, 0, CustomModelData.MAX_DEATHS);
+        System.arraycopy(data.getDeathAnimDurations(), 0, modelEntity.deathAnimDurations, 0, CustomModelData.MAX_DEATHS);
+
+        // Only ask for an animation resync when the animation config really changed.
+        // Doing it unconditionally would restart the base loop and flicker.
+        String signature = modelEntity.animResLoc + "|" + modelEntity.idleAnim + "|" + modelEntity.walkAnim
+                + "|" + modelEntity.modelResLoc;
+        if (!signature.equals(modelEntity.animConfigSignature)) {
+            boolean first = modelEntity.animConfigSignature == null;
+            modelEntity.animConfigSignature = signature;
+            if (!first) modelEntity.requestAnimResync();
+        }
+    }
+
+    @Unique
+    private static String gecko$orEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    @Unique
+    private static ResourceLocation gecko$parse(String value) {
+        if (value == null || value.isEmpty()) return null;
+        try {
+            return new ResourceLocation(value);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Unique
     private void playGeckoSound(String soundId) {
         if (soundId == null || soundId.isEmpty()) return;
         if (level().isClientSide) return;
-        ResourceLocation sndLoc;
-        try {
-            sndLoc = new ResourceLocation(soundId);
-        } catch (Exception e) {
-            return;
-        }
+        ResourceLocation sndLoc = gecko$parse(soundId);
+        if (sndLoc == null) return;
         SoundEvent event = SoundEvent.createVariableRangeEvent(sndLoc);
         this.level().playSound(null, this.blockPosition(), event, SoundSource.PLAYERS, 1.0f, 1.0f);
     }

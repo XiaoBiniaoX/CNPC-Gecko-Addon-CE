@@ -1,6 +1,8 @@
 package com.goodbird.cnpcgeckoaddon.mixin.impl;
 
+import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.entity.LivingEntity;
 import noppes.npcs.ModelData;
 import noppes.npcs.client.EntityUtil;
 import noppes.npcs.entity.EntityCustomNpc;
@@ -21,8 +23,14 @@ public class ClientMixinDataDisplay {
     @Inject(method = "readToNBT", at = @At("TAIL"), remap = false)
     public void readFromNBTEnd(CompoundTag nbttagcompound, CallbackInfo ci){
         if(npc instanceof EntityCustomNpc customNpc) {
-            if(ModelData.get(customNpc).getEntity(npc)!=null)
-                EntityUtil.Copy(npc, ModelData.get(customNpc).getEntity(npc));
+            LivingEntity model = ModelData.get(customNpc).getEntity(npc);
+            if(model != null) {
+                // Only copy data here. Do NOT reset the animation controller: this method
+                // runs on every routine display sync, and resetting would restart the base
+                // animation constantly (visible flicker). Config changes are detected by
+                // signature comparison in MixinEntityCustomNpc.
+                EntityUtil.Copy(npc, model);
+            }
         }
     }
 }

@@ -171,6 +171,9 @@ public class CustomModelData {
                 for (int i = 0; i < Math.min(list.size(), attackCount); i++)
                     attackSoundNames[i] = list.getString(i);
             }
+            // Old saves have no sound lists at all: guarantee non-null entries
+            for (int i = 0; i < MAX_ATTACKS; i++)
+                if (attackSoundNames[i] == null) attackSoundNames[i] = "";
 
             if (nbttagcompound.contains("HurtAnimCount")) {
                 hurtAnimCount = Math.min(nbttagcompound.getInt("HurtAnimCount"), MAX_HURTS);
@@ -191,6 +194,8 @@ public class CustomModelData {
                         hurtSoundNames[i] = list.getString(i);
                 }
             }
+            for (int i = 0; i < MAX_HURTS; i++)
+                if (hurtSoundNames[i] == null) hurtSoundNames[i] = "";
 
             if (nbttagcompound.contains("DeathAnimCount")) {
                 deathAnimCount = Math.min(nbttagcompound.getInt("DeathAnimCount"), MAX_DEATHS);

@@ -83,10 +83,65 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
     // C fix: hysteresis for idle/walk switching
     private int stableTicks = 0;
     private boolean wasMoving = false;
-    private static final int STABLE_THRESHOLD = 3;
+    // Push/squeeze fix: require a stronger, longer-lasting limb swing before switching
+    // idle <-> walk, so being shoved by other entities does not restart the animation.
+    private static final int STABLE_THRESHOLD = 6;
+    private static final float LIMB_SWING_THRESHOLD = 0.25F;
+    // Watchdog for stuck one-shot overrides (20 seconds)
+    private static final int MANUAL_ANIM_TIMEOUT = 400;
+    private String manualAnimWatchName = null;
+    private int manualAnimTicks = 0;
+    /**
+     * Set only when the animation config actually changed (see MixinEntityCustomNpc).
+     * The next animation tick drops any stale override and re-applies the base animation.
+     * Must never be triggered by routine data syncs, or the base loop restarts and flickers.
+     */
+    public boolean needsAnimResync = false;
+    /** Signature of the last applied animation config, used to detect real changes. */
+    public String animConfigSignature = null;
+
+    public void requestAnimResync() {
+        this.needsAnimResync = true;
+    }
 
     private PlayState predicateMovement(AnimationState<EntityCustomModel> event) {
         AnimationController<?> controller = event.getController();
+        if (needsAnimResync) {
+            // A reset happened while this model entity was kept alive: throw away every
+            // cached override/base state so idle/walk is re-applied from scratch.
+            needsAnimResync = false;
+            manualAnimName = null;
+            manualAnimRaw = null;
+            manualAnimWatchName = null;
+            manualAnimTicks = 0;
+            dialogAnimName = null;
+            dialogAnimRaw = null;
+            currentOverrideAnim = "";
+            currentBaseAnimName = "";
+            hurtAnimationPlaying = false;
+            deathAnimationPlaying = false;
+            stableTicks = 0;
+            controller.forceAnimationReset();
+        }
+        if (manualAnimName != null) {
+            // Watchdog: a one-shot override must never hold the controller forever.
+            // A stale name (e.g. left over from before a config change, or an animation
+            // that no longer exists in the current file) would otherwise block idle/walk.
+            if (!manualAnimName.equals(manualAnimWatchName)) {
+                manualAnimWatchName = manualAnimName;
+                manualAnimTicks = 0;
+            } else if (++manualAnimTicks > MANUAL_ANIM_TIMEOUT) {
+                manualAnimName = null;
+                manualAnimRaw = null;
+                manualAnimWatchName = null;
+                manualAnimTicks = 0;
+                hurtAnimationPlaying = false;
+                deathAnimationPlaying = false;
+            }
+        } else {
+            manualAnimWatchName = null;
+            manualAnimTicks = 0;
+        }
         if (manualAnimName != null) {
             if (controller.getAnimationState() == AnimationController.State.STOPPED) {
                 manualAnimName = null;
@@ -118,7 +173,8 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
             }
         }
         // C: Debounce movement detection
-        boolean isMoving = !(event.getLimbSwingAmount() > -0.15F && event.getLimbSwingAmount() < 0.15F) && !walkAnim.isEmpty();
+        float limb = event.getLimbSwingAmount();
+        boolean isMoving = !(limb > -LIMB_SWING_THRESHOLD && limb < LIMB_SWING_THRESHOLD) && !walkAnim.isEmpty();
         if (isMoving == wasMoving) {
             if (stableTicks < 20) stableTicks++;
         } else {
@@ -138,7 +194,10 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
             return PlayState.STOP;
         }
 
-        // B: Only switch on actual change or when controller is stopped
+        // B: Only switch on actual change or when the controller is stopped.
+        // Deliberately do NOT force a re-apply just because the controller currently plays
+        // a different animation (e.g. right after a hurt one-shot): doing that restarts the
+        // base loop from frame 0 every time and causes the visible flicker.
         boolean animChanged = !targetAnim.equals(currentBaseAnimName);
         boolean stopped = controller.getAnimationState() == AnimationController.State.STOPPED;
 

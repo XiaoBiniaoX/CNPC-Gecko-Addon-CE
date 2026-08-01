@@ -19,7 +19,7 @@ apply plugin: 'net.minecraftforge.gradle'
 apply plugin: 'org.spongepowered.mixin'
 
 group = 'com.goodbird.cnpcgeckoaddon'
-version = '1.20.1-1.2.1'
+version = '1.20.1-1.2.2'
 
 java {
     archivesBaseName = 'CNPC-Gecko-Addon-CE'

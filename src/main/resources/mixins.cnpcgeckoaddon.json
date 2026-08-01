@@ -12,8 +12,10 @@
     "MixinItemScriptedWrapper",
     "MixinEntityCustomNpc",
     "MixinEntityNPCAttack",
+    "MixinEntityNPCReset",
     "MixinEntityUtil",
     "MixinModelData",
+    "ModelDataSharedAccessor",
     "MixinNpcWrapper",
     "MixinWrapperNpcApi",
     "TileScriptedMixin"

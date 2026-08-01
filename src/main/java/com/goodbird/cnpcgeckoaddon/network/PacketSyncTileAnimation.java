@@ -4,6 +4,7 @@ import com.goodbird.cnpcgeckoaddon.tile.TileEntityCustomModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.network.NetworkEvent;
 import noppes.npcs.blocks.tiles.TileScripted;
@@ -39,13 +40,18 @@ public class PacketSyncTileAnimation {
     }
 
     public static void handle(PacketSyncTileAnimation packet, Supplier<NetworkEvent.Context> ctx) {
-        BlockEntity entity = Minecraft.getInstance().player.getCommandSenderWorld().getBlockEntity(packet.pos);
-        if(!(entity instanceof TileScripted)) return;
-        TileScripted tile = (TileScripted) entity;
-        if(tile.renderTile==null){
-            tile.renderTile = new TileEntityCustomModel(tile);
-        }
-        TileEntityCustomModel geckoTile = (TileEntityCustomModel) tile.renderTile;
-        geckoTile.manualAnimName = packet.animName;
+        NetworkEvent.Context context = ctx.get();
+        context.enqueueWork(() -> {
+            Level level = Minecraft.getInstance().level;
+            if (level == null) return;
+            BlockEntity entity = level.getBlockEntity(packet.pos);
+            if (!(entity instanceof TileScripted tile)) return;
+            if (tile.renderTile == null) {
+                tile.renderTile = new TileEntityCustomModel(tile);
+            }
+            if (!(tile.renderTile instanceof TileEntityCustomModel geckoTile)) return;
+            geckoTile.manualAnimName = packet.animName;
+        });
+        context.setPacketHandled(true);
     }
 }

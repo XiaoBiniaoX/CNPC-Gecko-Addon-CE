@@ -457,8 +457,10 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
         if (button.id >= 700 && button.id < 700 + CustomModelData.MAX_ATTACKS) {
             int idx = button.id - 700;
             if (idx < getModelData(npc).getAttackCount()) {
-                openSoundPicker(getModelData(npc).getAttackSoundNames()[idx],
-                    (result) -> getModelData(npc).getAttackSoundNames()[idx] = result);
+                String[] sounds = getModelData(npc).getAttackSoundNames();
+                if (sounds[idx] == null) sounds[idx] = "";
+                openSoundPicker(sounds[idx],
+                    (result) -> sounds[idx] = result == null ? "" : result);
             }
             return;
         }
@@ -489,8 +491,10 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
         if (button.id >= 1500 && button.id < 1500 + CustomModelData.MAX_HURTS) {
             int idx = button.id - 1500;
             if (idx < getModelData(npc).getHurtAnimCount()) {
-                openSoundPicker(getModelData(npc).getHurtSoundNames()[idx],
-                    (result) -> getModelData(npc).getHurtSoundNames()[idx] = result);
+                String[] sounds = getModelData(npc).getHurtSoundNames();
+                if (sounds[idx] == null) sounds[idx] = "";
+                openSoundPicker(sounds[idx],
+                    (result) -> sounds[idx] = result == null ? "" : result);
             }
             return;
         }
@@ -636,7 +640,18 @@ public class GuiModelAnimation extends GuiNPCInterface implements ITextfieldList
     }
 
     private void openSoundPicker(String currentSound, Consumer<String> callback) {
-        setSubGui(new GuiSoundSelectionWrapper(currentSound, callback));
+        // Old saves can hold a null/invalid sound string; CNPC's picker would throw on it
+        String safe = currentSound;
+        if (safe != null && !safe.isEmpty()) {
+            try {
+                new ResourceLocation(safe);
+            } catch (Exception e) {
+                safe = "";
+            }
+        } else {
+            safe = "";
+        }
+        setSubGui(new GuiSoundSelectionWrapper(safe, callback));
     }
 
     private static class GuiSoundSelectionWrapper extends GuiSoundSelection {

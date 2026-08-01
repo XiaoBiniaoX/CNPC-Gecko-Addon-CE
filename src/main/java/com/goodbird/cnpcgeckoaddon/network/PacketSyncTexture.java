@@ -3,6 +3,7 @@ package com.goodbird.cnpcgeckoaddon.network;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
 import net.minecraftforge.network.NetworkEvent;
 import noppes.npcs.entity.EntityCustomNpc;
 
@@ -31,9 +32,15 @@ public class PacketSyncTexture {
     }
 
     public static void handle(PacketSyncTexture packet, Supplier<NetworkEvent.Context> ctx) {
-        Entity entity = Minecraft.getInstance().player.getCommandSenderWorld().getEntity(packet.id);
-        if(!(entity instanceof EntityCustomNpc npc)) return;
-        npc.display.setSkinTexture(packet.texture);
+        NetworkEvent.Context context = ctx.get();
+        context.enqueueWork(() -> {
+            Level level = Minecraft.getInstance().level;
+            if (level == null) return;
+            Entity entity = level.getEntity(packet.id);
+            if (!(entity instanceof EntityCustomNpc npc)) return;
+            npc.display.setSkinTexture(packet.texture);
+        });
+        context.setPacketHandled(true);
     }
 }
 
