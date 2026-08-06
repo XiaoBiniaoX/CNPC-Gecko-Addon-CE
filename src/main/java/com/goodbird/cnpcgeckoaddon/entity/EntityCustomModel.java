@@ -143,9 +143,7 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
             manualAnimTicks = 0;
         }
         if (manualAnimName != null) {
-            System.out.println("[GeckoDBG] predicate: manualAnim=" + manualAnimName + " state=" + controller.getAnimationState() + " needsResync=" + needsAnimResync);
             if (controller.getAnimationState() == AnimationController.State.STOPPED) {
-                System.out.println("[GeckoDBG]   -> STOPPED, clearing manualAnimName");
                 manualAnimName = null;
             } else {
                 if (manualAnimRaw == null || !manualAnimName.equals(currentOverrideAnim)) {
@@ -153,7 +151,15 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
                     currentOverrideAnim = manualAnimName;
                     controller.forceAnimationReset();
                 }
+                // 手动动画（脚本/攻击触发）必须即时播放：默认 10 tick 过渡会造成约 0.5 秒延后。
+                // 与 base 动画路径一致：播放时临时过渡=0，播完恢复配置值。
+                int configuredTransition = 10;
+                if (owner != null) {
+                    configuredTransition = ((IDataDisplay) owner.display).getCustomModelData().getTransitionLengthTicks();
+                }
+                controller.transitionLength(0);
                 controller.setAnimation(manualAnimRaw);
+                controller.transitionLength(configuredTransition);
                 if (controller.getAnimationState() == AnimationController.State.TRANSITIONING &&
                         !((AnimControllerAccessor) controller).getJustStartedTransition() && manualAnimInstant) {
                     ((AnimControllerAccessor) controller).setAnimationState(AnimationController.State.RUNNING);
@@ -279,7 +285,6 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
     }
 
     public void startAttackAnimation(String animName, float frameThreshold, Entity target) {
-        System.out.println("[GeckoDBG] startAttackAnimation: anim=" + animName + " client=" + level().isClientSide + " owner=" + (owner != null ? owner.getId() : "NULL"));
         this.currentAttackAnim = animName;
         this.currentAttackFrame = frameThreshold;
         this.attackingTarget = target;
@@ -294,7 +299,6 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
         this.manualAnimName = animName;
         this.manualAnimInstant = false;
         if (!level().isClientSide && owner != null) {
-            System.out.println("[GeckoDBG]   -> sendToAll PacketSyncAnimation id=" + owner.getId());
             NetworkWrapper.sendToAll(new PacketSyncAnimation(owner.getId(), animName, false));
         }
     }

@@ -65,7 +65,6 @@ public class PacketSyncAnimation {
 
     public static void handle(PacketSyncAnimation packet, Supplier<NetworkEvent.Context> ctx) {
         NetworkEvent.Context context = ctx.get();
-        System.out.println("[GeckoDBG] PacketSyncAnimation received: id=" + packet.id + " anim=" + packet.animName + " instant=" + packet.instant);
         context.enqueueWork(() -> {
             // 注意：不能直接用 Minecraft.getInstance().level——该字段类型是 ClientLevel（带 @OnlyIn(CLIENT)），
             // 专用服务器加载本类验证字节码时会触发 RuntimeDistCleaner 崩溃（"Attempted to load class ... ClientLevel for invalid dist"）。
@@ -79,13 +78,12 @@ public class PacketSyncAnimation {
             }
             Level level = player.level();
             Entity entity = level.getEntity(packet.id);
-            if (!(entity instanceof EntityCustomNpc npc)) { System.out.println("[GeckoDBG]   -> client entity not found/not customnpc: " + (entity == null ? "null" : entity.getClass().getName())); PENDING.put(packet.id, new PendingAnim(packet.animName, packet.instant)); return; }
-            if (npc.modelData == null) { System.out.println("[GeckoDBG]   -> modelData null"); return; }
-            if (!(npc.modelData.getEntity(npc) instanceof EntityCustomModel entityCustomModel)) { System.out.println("[GeckoDBG]   -> getEntity()=" + npc.modelData.getEntity(npc) + " not EntityCustomModel"); PENDING.put(packet.id, new PendingAnim(packet.animName, packet.instant)); return; }
+            if (!(entity instanceof EntityCustomNpc npc)) { PENDING.put(packet.id, new PendingAnim(packet.animName, packet.instant)); return; }
+            if (npc.modelData == null) { return; }
+            if (!(npc.modelData.getEntity(npc) instanceof EntityCustomModel entityCustomModel)) { PENDING.put(packet.id, new PendingAnim(packet.animName, packet.instant)); return; }
             PENDING.remove(packet.id);
             entityCustomModel.manualAnimName = packet.animName;
             entityCustomModel.manualAnimInstant = packet.instant;
-            System.out.println("[GeckoDBG]   -> manualAnimName set to " + packet.animName);
         });
         context.setPacketHandled(true);
     }

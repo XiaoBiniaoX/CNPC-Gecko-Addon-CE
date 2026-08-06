@@ -16,27 +16,23 @@ public class MixinEntityNPCAttack {
     @Inject(method = "doHurtTarget", at = @At("HEAD"), cancellable = true)
     public void onDoHurtTarget(Entity target, CallbackInfoReturnable<Boolean> cir) {
         EntityNPCInterface self = (EntityNPCInterface) (Object) this;
-        System.out.println("[GeckoDBG] doHurtTarget: " + self.getName().getString() + " client=" + self.level().isClientSide);
-        if (!(self instanceof EntityCustomNpc customNpc)) { System.out.println("[GeckoDBG]   -> not EntityCustomNpc"); return; }
+        if (!(self instanceof EntityCustomNpc customNpc)) { return; }
         if (!(customNpc.modelData.getEntity(self) instanceof EntityCustomModel em)) {
-            System.out.println("[GeckoDBG]   -> getEntity()=" + customNpc.modelData.getEntity(self) + " not EntityCustomModel");
             return;
         }
-        if (em.frameAttackInProgress) { System.out.println("[GeckoDBG]   -> frameAttackInProgress"); return; }
+        if (em.frameAttackInProgress) { return; }
         // 动画等待帧伤害结算期间，AI 冷却到期的重复攻击调用直接吞掉：
         // 否则每次调用都会无条件重置 attackAnimStartTick，伤害延迟永远累计不到，
         // 帧伤害分支永不触发，造成「设置了伤害延迟后连伤害都不造成」。
         if (em.currentAttackAnim != null && !em.attackDamageDealt && em.currentAttackFrame > 0) {
-            System.out.println("[GeckoDBG]   -> attack anim pending, swallow duplicate attack");
             cir.setReturnValue(false);
             cir.cancel();
             return;
         }
-        if (em.attackAnimNames == null) { System.out.println("[GeckoDBG]   -> attackAnimNames null"); return; }
+        if (em.attackAnimNames == null) { return; }
 
         String selectedAnim = weightedRandomPick(self, em.attackAnimNames, em.attackWeights, em.attackCount);
-        System.out.println("[GeckoDBG]   -> selectedAnim=" + selectedAnim + " count=" + em.attackCount + " names[0]=" + (em.attackAnimNames[0] == null ? "null" : em.attackAnimNames[0]));
-        if (selectedAnim == null || selectedAnim.isEmpty()) { System.out.println("[GeckoDBG]   -> empty anim, skip"); return; }
+        if (selectedAnim == null || selectedAnim.isEmpty()) { return; }
 
         float frame = 0;
         for (int i = 0; i < em.attackCount; i++) {

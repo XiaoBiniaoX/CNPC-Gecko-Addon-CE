@@ -42,12 +42,9 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
                 if (pendingEntity instanceof EntityCustomModel pendingModel) {
                     pendingModel.manualAnimName = pending.animName;
                     pendingModel.manualAnimInstant = pending.instant;
-                    System.out.println("[GeckoDBG] pending anim applied: id=" + this.getId() + " anim=" + pending.animName);
                 } else {
                     if (++pending.tries < 100) {
                         PacketSyncAnimation.PENDING.put(this.getId(), pending);
-                    } else {
-                        System.out.println("[GeckoDBG] pending anim dropped after 100 tries: id=" + this.getId() + " anim=" + pending.animName + " getEntity()=" + pendingEntity);
                     }
                 }
             }
@@ -55,7 +52,8 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
         IDataDisplay display = (IDataDisplay) this.display;
         Entity entity = this.modelData.getEntity(this);
         if (!(entity instanceof EntityCustomModel)) {
-            System.out.println("[GeckoDBG] tick: getEntity()=" + entity + " client=" + level().isClientSide);
+            // 不打印日志：未配置 Geo 模型的普通 NPC 每 tick 都会走到这里，
+            // 打印会造成日志每秒数百行的膨胀（曾 3 分钟写满 1GB）。
             return;
         }
         EntityCustomModel modelEntity = (EntityCustomModel) entity;
@@ -91,9 +89,6 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
                 if (hurtAnim != null && !hurtAnim.isEmpty()) {
                     modelEntity.playHurtAnimation(hurtAnim);
                     modelEntity.hurtAnimationPlaying = true;
-                    System.out.println("[GeckoDBG] tick(hurt): playHurtAnimation=" + hurtAnim + " client=" + level().isClientSide);
-                } else {
-                    System.out.println("[GeckoDBG] tick(hurt): no hurt anim available client=" + level().isClientSide);
                 }
             }
         }
@@ -108,9 +103,6 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
             }
             if (deathAnim != null && !deathAnim.isEmpty()) {
                 modelEntity.playDeathAnimation(deathAnim);
-                System.out.println("[GeckoDBG] tick(death): playDeathAnimation=" + deathAnim + " client=" + level().isClientSide);
-            } else {
-                System.out.println("[GeckoDBG] tick(death): no death anim available client=" + level().isClientSide);
             }
         }
         if (this.deathTime <= 0) {
@@ -122,7 +114,6 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
             if (modelEntity.currentAttackAnim != null && modelEntity.attackingTarget != null && !modelEntity.attackDamageDealt && modelEntity.currentAttackFrame > 0) {
                 int elapsedTicks = tickCount - modelEntity.attackAnimStartTick;
                 int targetTicks = (int)(modelEntity.currentAttackFrame * 20.0f);
-                System.out.println("[GeckoDBG] tick(frameDamage): elapsed=" + elapsedTicks + " target=" + targetTicks + " anim=" + modelEntity.currentAttackAnim);
                 if (elapsedTicks >= targetTicks && targetTicks > 0) {
                     modelEntity.frameAttackInProgress = true;
                     this.doHurtTarget(modelEntity.attackingTarget);
@@ -131,10 +122,15 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
                     playGeckoSound(modelEntity.currentAttackSound);
                 }
             }
-            int animTimeout = 200;
+            // 兜底收尾：帧结算被异常跳过（如目标失效）时，在 target 之后再等 60 tick 强制收尾。
+            // 之前固定 200 tick（10 秒），在配置 10s/12s 延时时会抢先于帧结算触发，
+            // 且兜底补刀未置 frameAttackInProgress 被守卫吞掉 → 无伤害 + 状态被清（延时伤害失效）。
+            int animTimeout = Math.max((int)(modelEntity.currentAttackFrame * 20.0f), 200) + 60;
             if (modelEntity.currentAttackAnim != null && (tickCount - modelEntity.attackAnimStartTick > animTimeout)) {
                 if (!modelEntity.attackDamageDealt && modelEntity.attackingTarget != null && modelEntity.attackingTarget.isAlive()) {
+                    modelEntity.frameAttackInProgress = true;
                     this.doHurtTarget(modelEntity.attackingTarget);
+                    modelEntity.frameAttackInProgress = false;
                     playGeckoSound(modelEntity.currentAttackSound);
                 }
                 modelEntity.resetAttackState();
