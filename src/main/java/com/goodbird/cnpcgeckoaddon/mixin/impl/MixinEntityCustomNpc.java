@@ -3,6 +3,7 @@ package com.goodbird.cnpcgeckoaddon.mixin.impl;
 import com.goodbird.cnpcgeckoaddon.data.CustomModelData;
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
 import com.goodbird.cnpcgeckoaddon.mixin.IDataDisplay;
+import com.goodbird.cnpcgeckoaddon.network.PacketSyncAnimation;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
@@ -32,9 +33,31 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
 
     @Inject(method = "tick", at = @At("TAIL"))
     public void tick(CallbackInfo ci) {
+        if (level().isClientSide) {
+            // 补放：脚本动画包到达时实体还没加载/模型实体还没创建时被缓存，
+            // 这里在客户端 tick 里尝试补放，直到成功或超时放弃。
+            PacketSyncAnimation.PendingAnim pending = PacketSyncAnimation.PENDING.remove(this.getId());
+            if (pending != null) {
+                Entity pendingEntity = this.modelData.getEntity(this);
+                if (pendingEntity instanceof EntityCustomModel pendingModel) {
+                    pendingModel.manualAnimName = pending.animName;
+                    pendingModel.manualAnimInstant = pending.instant;
+                    System.out.println("[GeckoDBG] pending anim applied: id=" + this.getId() + " anim=" + pending.animName);
+                } else {
+                    if (++pending.tries < 100) {
+                        PacketSyncAnimation.PENDING.put(this.getId(), pending);
+                    } else {
+                        System.out.println("[GeckoDBG] pending anim dropped after 100 tries: id=" + this.getId() + " anim=" + pending.animName + " getEntity()=" + pendingEntity);
+                    }
+                }
+            }
+        }
         IDataDisplay display = (IDataDisplay) this.display;
         Entity entity = this.modelData.getEntity(this);
-        if (!(entity instanceof EntityCustomModel)) return;
+        if (!(entity instanceof EntityCustomModel)) {
+            System.out.println("[GeckoDBG] tick: getEntity()=" + entity + " client=" + level().isClientSide);
+            return;
+        }
         EntityCustomModel modelEntity = (EntityCustomModel) entity;
         CustomModelData data = display.getCustomModelData();
 
@@ -68,6 +91,9 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
                 if (hurtAnim != null && !hurtAnim.isEmpty()) {
                     modelEntity.playHurtAnimation(hurtAnim);
                     modelEntity.hurtAnimationPlaying = true;
+                    System.out.println("[GeckoDBG] tick(hurt): playHurtAnimation=" + hurtAnim + " client=" + level().isClientSide);
+                } else {
+                    System.out.println("[GeckoDBG] tick(hurt): no hurt anim available client=" + level().isClientSide);
                 }
             }
         }
@@ -82,6 +108,9 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
             }
             if (deathAnim != null && !deathAnim.isEmpty()) {
                 modelEntity.playDeathAnimation(deathAnim);
+                System.out.println("[GeckoDBG] tick(death): playDeathAnimation=" + deathAnim + " client=" + level().isClientSide);
+            } else {
+                System.out.println("[GeckoDBG] tick(death): no death anim available client=" + level().isClientSide);
             }
         }
         if (this.deathTime <= 0) {
@@ -93,6 +122,7 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
             if (modelEntity.currentAttackAnim != null && modelEntity.attackingTarget != null && !modelEntity.attackDamageDealt && modelEntity.currentAttackFrame > 0) {
                 int elapsedTicks = tickCount - modelEntity.attackAnimStartTick;
                 int targetTicks = (int)(modelEntity.currentAttackFrame * 20.0f);
+                System.out.println("[GeckoDBG] tick(frameDamage): elapsed=" + elapsedTicks + " target=" + targetTicks + " anim=" + modelEntity.currentAttackAnim);
                 if (elapsedTicks >= targetTicks && targetTicks > 0) {
                     modelEntity.frameAttackInProgress = true;
                     this.doHurtTarget(modelEntity.attackingTarget);

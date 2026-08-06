@@ -4,11 +4,11 @@ import com.goodbird.cnpcgeckoaddon.data.CustomModelData;
 import com.goodbird.cnpcgeckoaddon.mixin.IDataDisplay;
 import com.goodbird.cnpcgeckoaddon.network.NetworkWrapper;
 import com.goodbird.cnpcgeckoaddon.network.PacketSyncAnimation;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import noppes.npcs.api.entity.IPlayer;
 import noppes.npcs.api.wrapper.EntityLivingWrapper;
 import noppes.npcs.api.wrapper.NPCWrapper;
 import noppes.npcs.entity.EntityNPCInterface;
-import noppes.npcs.packets.Packets;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
@@ -61,6 +61,11 @@ public abstract class MixinNpcWrapper extends EntityLivingWrapper<EntityNPCInter
     }
     @Unique
     public void syncAnimationsForAll(String animName) {
+        // 该方法设计为服务端脚本调用；客户端（单机内部/客户端脚本）没有服务端实例，
+        // 直接发包会 NPE，这里判空保护。
+        if (ServerLifecycleHooks.getCurrentServer() == null) {
+            return;
+        }
         NetworkWrapper.sendToAll(new PacketSyncAnimation(entity.getId(), animName, false));
     }
 
@@ -70,6 +75,9 @@ public abstract class MixinNpcWrapper extends EntityLivingWrapper<EntityNPCInter
     }
     @Unique
     public void syncInstantAnimationsForAll(String animName) {
+        if (ServerLifecycleHooks.getCurrentServer() == null) {
+            return;
+        }
         NetworkWrapper.sendToAll(new PacketSyncAnimation(entity.getId(), animName, true));
     }
 

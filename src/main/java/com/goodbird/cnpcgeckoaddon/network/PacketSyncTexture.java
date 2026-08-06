@@ -1,6 +1,7 @@
 package com.goodbird.cnpcgeckoaddon.network;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
@@ -34,7 +35,11 @@ public class PacketSyncTexture {
     public static void handle(PacketSyncTexture packet, Supplier<NetworkEvent.Context> ctx) {
         NetworkEvent.Context context = ctx.get();
         context.enqueueWork(() -> {
-            Level level = Minecraft.getInstance().level;
+            // 不能直接用 Minecraft.getInstance().level：字段类型 ClientLevel 带 @OnlyIn(CLIENT)，服务器加载会崩。
+            // player 在加入/离开世界窗口时为 null，需先判空。
+            LocalPlayer player = Minecraft.getInstance().player;
+            if (player == null) return;
+            Level level = player.level();
             if (level == null) return;
             Entity entity = level.getEntity(packet.id);
             if (!(entity instanceof EntityCustomNpc npc)) return;

@@ -2,6 +2,7 @@ package com.goodbird.cnpcgeckoaddon.network;
 
 import com.goodbird.cnpcgeckoaddon.tile.TileEntityCustomModel;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.level.Level;
@@ -42,7 +43,11 @@ public class PacketSyncTileAnimation {
     public static void handle(PacketSyncTileAnimation packet, Supplier<NetworkEvent.Context> ctx) {
         NetworkEvent.Context context = ctx.get();
         context.enqueueWork(() -> {
-            Level level = Minecraft.getInstance().level;
+            // 不能直接用 Minecraft.getInstance().level：字段类型 ClientLevel 带 @OnlyIn(CLIENT)，服务器加载会崩。
+            // player 在加入/离开世界窗口时为 null，需先判空。
+            LocalPlayer player = Minecraft.getInstance().player;
+            if (player == null) return;
+            Level level = player.level();
             if (level == null) return;
             BlockEntity entity = level.getBlockEntity(packet.pos);
             if (!(entity instanceof TileScripted tile)) return;
