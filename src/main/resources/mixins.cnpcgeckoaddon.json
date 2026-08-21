@@ -6,7 +6,6 @@
   "mixins": [
     "AnimControllerAccessor",
     "GeoModelAccessor",
-    "EnumScriptTypeMixin",
     "MixinBlockScriptedWrapper",
     "MixinDataDisplay",
     "MixinItemScriptedWrapper",

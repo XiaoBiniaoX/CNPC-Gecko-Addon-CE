@@ -45,8 +45,6 @@ public class PacketInstructionKeyframe {
         }
 
         AnimationKeyframeEvent event = new AnimationKeyframeEvent((ICustomNpc) NpcAPI.Instance().getIEntity(npc), ctx.get().getSender(), packet.instruction);
-        if(GAEnumScriptType.ANIMATION_INSTRUCTION != null) {
-            npc.script.runScript(GAEnumScriptType.ANIMATION_INSTRUCTION, event);
-        }
+        GAEnumScriptType.runAnimationInstruction(npc.script, event);
     }
 }

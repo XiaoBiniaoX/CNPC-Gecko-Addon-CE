@@ -47,8 +47,9 @@ public class NpcTextureUtils {
 
                         npc.textureLocation = new ResourceLocation("customnpcs", "skins/" + sb + size);
                         loadSkin(null, npc.textureLocation, npc.display.getSkinUrl(), !size.isEmpty());
-                    } catch (Exception var10) {
-                        var10.printStackTrace();
+                    } catch (Exception ignored) {
+                        // 皮肤 URL 下载失败：下面会回落到默认皮肤（textureLocation 仍为 null）。
+                        // 不打印堆栈——这是每帧渲染路径，打印会刷屏。
                     }
                 }
             }

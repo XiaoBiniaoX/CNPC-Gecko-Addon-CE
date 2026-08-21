@@ -40,8 +40,7 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
             if (pending != null) {
                 Entity pendingEntity = this.modelData.getEntity(this);
                 if (pendingEntity instanceof EntityCustomModel pendingModel) {
-                    pendingModel.manualAnimName = pending.animName;
-                    pendingModel.manualAnimInstant = pending.instant;
+                    pendingModel.requestManualAnim(pending.animName, pending.instant, pending.priority);
                 } else {
                     if (++pending.tries < 100) {
                         PacketSyncAnimation.PENDING.put(this.getId(), pending);
@@ -82,8 +81,16 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
         }
 
         // Hurt animation only (sound is handled by HurtSoundEvents, independent of anim)
-        if (this.hurtTime > 0 && !modelEntity.hurtAnimationPlaying) {
-            if (modelEntity.currentAttackAnim == null) {
+        // 原先此处要求 currentAttackAnim == null（攻击中不播受伤动画），与约定的
+        // 「受伤 > 攻击」相反，改由 EntityCustomModel 的优先级仲裁决定是否覆盖。
+        //
+        // 必须限定服务端触发：hurtTime / deathTime 两端都会同步，客户端原先也会跑到这里，
+        // 于是同一次受伤被「掷两次骰子」——服务端 pickWeightedHurtAnim 抽中 A 发包过来，
+        // 客户端本地又抽中 B 覆盖掉刚收到的 A（实测日志里 skill5 被 attack 顶掉、
+        // attack 被 skill5 顶掉，同一毫秒内两次 START）。表现就是受伤/攻击动画
+        // 播一半被替换、随机抽搐。动画一律由服务端定夺、发包同步给所有客户端。
+        if (!level().isClientSide) {
+            if (this.hurtTime > 0 && !modelEntity.hurtAnimationPlaying) {
                 String hurtAnim = modelEntity.pickWeightedHurtAnim();
                 if (hurtAnim == null) hurtAnim = data.getHurtAnim();
                 if (hurtAnim != null && !hurtAnim.isEmpty()) {
@@ -91,22 +98,22 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
                     modelEntity.hurtAnimationPlaying = true;
                 }
             }
-        }
-        if (this.hurtTime <= 0) {
-            modelEntity.hurtAnimationPlaying = false;
-        }
+            if (this.hurtTime <= 0) {
+                modelEntity.hurtAnimationPlaying = false;
+            }
 
-        if (this.deathTime == 1 && !modelEntity.deathAnimationPlaying) {
-            String deathAnim = modelEntity.pickWeightedDeathAnim();
-            if (deathAnim == null || deathAnim.isEmpty()) {
-                deathAnim = data.getHurtAnim();
+            if (this.deathTime == 1 && !modelEntity.deathAnimationPlaying) {
+                String deathAnim = modelEntity.pickWeightedDeathAnim();
+                if (deathAnim == null || deathAnim.isEmpty()) {
+                    deathAnim = data.getHurtAnim();
+                }
+                if (deathAnim != null && !deathAnim.isEmpty()) {
+                    modelEntity.playDeathAnimation(deathAnim);
+                }
             }
-            if (deathAnim != null && !deathAnim.isEmpty()) {
-                modelEntity.playDeathAnimation(deathAnim);
+            if (this.deathTime <= 0) {
+                modelEntity.deathAnimationPlaying = false;
             }
-        }
-        if (this.deathTime <= 0) {
-            modelEntity.deathAnimationPlaying = false;
         }
 
         if (!level().isClientSide) {
