@@ -6,7 +6,7 @@ license = "All Rights Reserved"
 
 [[mods]]
 modId = "cnpcgeckoaddon"
-version = "1.20.1-1.2.3"
+version = "1.20.1-1.2.5"
 displayName = "CNPC-Gecko-Addon-CE"
 
 #updateJSONURL="http://myurl.me/"

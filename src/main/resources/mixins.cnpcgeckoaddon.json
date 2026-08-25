@@ -21,6 +21,7 @@
   ],
   "client": [
     "ClientMixinDataDisplay",
+    "MixinAnimationController",
     "MixinBlockScriptedRenderer",
     "MixinGuiCreationEntities",
     "MixinItemRenderer",

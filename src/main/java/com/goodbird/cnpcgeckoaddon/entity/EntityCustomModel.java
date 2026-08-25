@@ -24,6 +24,7 @@ import software.bernie.geckolib.core.animatable.GeoAnimatable;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animation.AnimatableManager;
 import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.AnimationProcessor;
 import software.bernie.geckolib.core.animation.AnimationState;
 import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.keyframe.event.CustomInstructionKeyframeEvent;
@@ -123,10 +124,22 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
     // idle <-> walk, so being shoved by other entities does not restart the animation.
     private static final int STABLE_THRESHOLD = 6;
     private static final float LIMB_SWING_THRESHOLD = 0.25F;
-    // Watchdog for stuck one-shot overrides (20 seconds)
-    private static final int MANUAL_ANIM_TIMEOUT = 400;
+    // 一次性动画卡死看门狗：**必须按动画时间（tick）计，不能按渲染帧数计**。
+    // 病史（2026-08-25 实测抓到）：旧实现 manualAnimTicks 每渲染一帧 +1，阈值 400。
+    // 但 predicateMovement 是渲染回调，帧率越高它涨得越快，而动画进度走的是 tick 时间。
+    // 朋友端实测 5.71 帧/tick，于是 400 帧只等于约 70 tick（3.5 秒）——
+    // 任何超过 70 tick 的动画都会在播完前被看门狗砍掉：
+    //   PLAY anim=a3 held=400 adjusted=64.8 len=110.0  ← 才播到 59%
+    //   KILL-BY-WATCHDOG anim=a3 heldTicks=401         ← 下一帧就被杀
+    // 这就是「长动画抬手一半直接断掉回 idle」的真凶，也解释了为何 a1(35t)/jump(55t) 正常
+    // 而 a3(110t)/s1(135t) 必卡，以及为何帧率越高越容易复现。
+    // 现在改为按 animTime 计：40 秒 = 800 tick（哈基彬指定），给超长动画留足余量。
+    private static final int MANUAL_ANIM_TIMEOUT_TICKS = 800;
     private String manualAnimWatchName = null;
-    private int manualAnimTicks = 0;
+    /** 本次一次性动画开始时的 animTime，看门狗据此按动画时间计时（不受帧率影响）。 */
+    private double manualAnimStartAnimTime = 0.0;
+    /** 诊断心跳去重用（同一 animTick 只打一条）。 */
+    private int gecko$lastHeartbeatTick = -1;
     /**
      * Set only when the animation config actually changed (see MixinEntityCustomNpc).
      * The next animation tick drops any stale override and re-applies the base animation.
@@ -138,6 +151,35 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
 
     public void requestAnimResync() {
         this.needsAnimResync = true;
+    }
+
+    // ==================== 每实体独立动画时间轴 ====================
+    // GeoModel 的 animTime / lastGameTickTime 是实例字段，而 ModelCustom 全局只有一个实例
+    // （RenderCustomModel 构造时 new ModelCustom()），所以所有 Gecko NPC 本来共用同一条时间轴。
+    // 而 getTick() 返回的是各自宿主的 owner.tickCount（跨模型实体重建保持稳定，不能改）。
+    // 两者叠加的后果：NPC A 把 animTime 推到自己的 tickCount，NPC B 渲染时又按自己的
+    // tickCount 拉回去，animTime 在多个 NPC 之间反复跳变、失去单调性。
+    // seekTime 一旦不单调，AnimationController 的 adjustedTick 就会乱跳，
+    // 一次性长动画极易撞上 adjustedTick >= length() 被判「播完」而中途消失
+    // （越长的动画窗口越大、越容易中招；玩家离远后渲染频率下降、交错模式被打乱，
+    //  正是「离远 + 10 秒以上动画」这个复现条件的由来）。
+    // 解法：每个模型实体自己存一份，由 ModelCustom.handleAnimations 在调用前后换入/换出。
+    /** 本实体自己的 animTime。NaN 表示尚未初始化（首次渲染时以 GeoModel 现值为起点）。 */
+    public double ownAnimTime = Double.NaN;
+    /** 本实体自己的 lastGameTickTime。 */
+    public double ownLastGameTickTime = Double.NaN;
+
+    // 注：曾在此加过「一次性动画未播完不许同级覆盖」的保护（manualAnimEndsAt），
+    // 实测证明是错的，已删除。它要修的「视野外空窗被覆盖」并不存在（END 全 done=true），
+    // 却带来实锤副作用：飞天大草（jump）落地接平A 时，平A 被拦进补播槽，
+    // 要等 jump 剩余 2~12 tick 播完才播出，观感就是「平A 有一点延迟」。
+    // 长动画被卡的真凶是看门狗按帧数计时（见 MANUAL_ANIM_TIMEOUT_TICKS 注释），与此无关。
+    // 结论：同优先级必须允许立刻覆盖，这是技能连按/连续攻击手感的基础。
+
+    /** GUI 配置的过渡帧数，取不到时用 GeckoLib 构造时的默认值 10。 */
+    private int configuredTransitionTicks() {
+        if (owner == null) return 10;
+        return ((IDataDisplay) owner.display).getCustomModelData().getTransitionLengthTicks();
     }
 
     /**
@@ -165,6 +207,7 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
             this.pendingAnimTick = tickCount;
             return false;
         }
+
         // 被新请求接管：旧的补播槽作废，否则它会在新动画播完后突然冒出来抢镜。
         this.pendingAnimName = null;
         this.pendingAnimPriority = PRIO_NONE;
@@ -194,7 +237,7 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
         this.manualAnimPriority = PRIO_NONE;
         this.currentOverrideAnim = "";
         this.manualAnimWatchName = null;
-        this.manualAnimTicks = 0;
+        this.manualAnimStartAnimTime = ownAnimTime;
     }
 
     /**
@@ -240,10 +283,11 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
             // that no longer exists in the current file) would otherwise block idle/walk.
             if (!manualAnimName.equals(manualAnimWatchName)) {
                 manualAnimWatchName = manualAnimName;
-                manualAnimTicks = 0;
-            } else if (++manualAnimTicks > MANUAL_ANIM_TIMEOUT) {
+                // 记下起始 animTime；用动画时间计时，与帧率无关。
+                manualAnimStartAnimTime = ownAnimTime;
+            } else if (ownAnimTime - manualAnimStartAnimTime > MANUAL_ANIM_TIMEOUT_TICKS) {
                 clearManualAnim();
-                // 卡死 20 秒才走到这里，补播槽里的请求早已过时，丢弃而不是补播。
+                // 卡死 40 秒才走到这里，补播槽里的请求早已过时，丢弃而不是补播。
                 pendingAnimName = null;
                 pendingAnimPriority = PRIO_NONE;
                 hurtAnimationPlaying = false;
@@ -251,7 +295,7 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
             }
         } else {
             manualAnimWatchName = null;
-            manualAnimTicks = 0;
+            manualAnimStartAnimTime = ownAnimTime;
         }
         if (manualAnimName != null) {
             // 只有「本动画自己播完」才清除。旧代码只判 STOPPED，任何原因造成的 STOPPED
@@ -270,23 +314,33 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
                 // 那几种是异常收尾，此时再塞一个动画只会掩盖问题。
                 consumePendingAnim();
             } else {
+                boolean justStarted = false;
                 if (manualAnimRaw == null || !manualAnimName.equals(currentOverrideAnim)) {
                     manualAnimRaw = RawAnimation.begin().thenPlay(manualAnimName);
                     currentOverrideAnim = manualAnimName;
                     controller.forceAnimationReset();
+                    justStarted = true;
                 }
-                // 手动动画（脚本/攻击触发）必须即时播放：默认 10 tick 过渡会造成约 0.5 秒延后。
-                // 与 base 动画路径一致：播放时临时过渡=0，播完恢复配置值。
-                int configuredTransition = 10;
-                if (owner != null) {
-                    configuredTransition = ((IDataDisplay) owner.display).getCustomModelData().getTransitionLengthTicks();
+                // 只在「本次起播」那一帧用 0 过渡消除 0.5 秒延后；播放期间绝不再碰
+                // transitionLength —— 这是「长动画抬手一半直接断掉回 idle」的真凶：
+                // AnimationController:489-491
+                //   if (transitionLength == 0.0 && shouldResetTick && state == TRANSITIONING)
+                //       currentAnimation = animationQueue.poll();
+                // thenPlay 单段动画的队列只有 1 个元素、起播时已被取走，队列此时是空的，
+                // 于是 currentAnimation 被置成 null → 下一帧 :275 的
+                // (currentAnimation != null || !queue.isEmpty()) 两者皆不成立 → :366 置 STOPPED
+                // → 我们的 playedOut 三重判定成立 → clearManualAnim() → 动画中途蒸发。
+                // 官方版全程不改 transitionLength（恒为构造值 10），所以原版不犯这个病。
+                if (justStarted) {
+                    controller.transitionLength(0);
+                    controller.setAnimation(manualAnimRaw);
+                    controller.transitionLength(configuredTransitionTicks());
+                } else {
+                    controller.setAnimation(manualAnimRaw);
                 }
-                controller.transitionLength(0);
-                controller.setAnimation(manualAnimRaw);
-                controller.transitionLength(configuredTransition);
                 // 动画名在当前动画文件里不存在时，GeckoLib 的 setAnimation 内部
                 // buildAnimationQueue 返回 null 并直接 stop()，currentRawAnimation 不会被改写。
-                // 此时若继续占着控制器，模型会一直冻结到 20 秒看门狗超时；
+                // 此时若继续占着控制器，模型会一直冻结到 40 秒看门狗超时；
                 // 立刻放弃、回落到走路/待机（与旧版对错误动画名的表现一致）。
                 if (controller.getAnimationState() == AnimationController.State.STOPPED
                         && controller.getCurrentRawAnimation() != manualAnimRaw) {
@@ -349,10 +403,24 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
         // base loop from frame 0 every time and causes the visible flicker.
         boolean animChanged = !targetAnim.equals(currentBaseAnimName);
         boolean stopped = controller.getAnimationState() == AnimationController.State.STOPPED;
+        // 过渡期队列饿死自救（「动画断掉后定格在 idle/walk 第一帧」的病灶）：
+        // 一次性动画播完回落 base 时走的是 animChanged 分支，此时 transitionLength 已被
+        // 恢复成配置值（默认 10），setAnimation 让控制器进 TRANSITIONING。
+        // 若 AnimationController:296 的 poll 条件
+        //   lastPollTime != seekTime && (adjustedTick == 0.0 || isJustStarting)
+        // 当帧不满足，currentAnimation 会停在 null，:337 直接 return —— 一根骨头都不动。
+        // 而下一帧 animChanged=false、stopped=false（状态是 TRANSITIONING 而非 STOPPED），
+        // 上面两个条件都进不去、不会再 setAnimation → 自持卡死，模型定格在第 0 帧。
+        // 这里补一条：TRANSITIONING 且队列已空、当前动画为 null，就重新起播。
+        boolean starved = controller.getAnimationState() == AnimationController.State.TRANSITIONING
+                && controller.getCurrentAnimation() == null
+                && ((AnimControllerAccessor) controller).gecko$getAnimationQueue().isEmpty();
 
-        if (animChanged || stopped) {
+        if (animChanged || stopped || starved) {
             currentBaseAnimName = targetAnim;
-            if (stopped) {
+            if (stopped || starved) {
+                // 饿死自救也要强制重建：否则 setAnimation 会因 RawAnimation 相等提前返回，
+                // 队列不会被重新填充，卡死状态维持原样。
                 controller.forceAnimationReset();
             }
             // Use 0 transition for base anim to avoid GeckoLib queue starvation
@@ -363,6 +431,7 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
             controller.transitionLength(0);
             controller.setAnimation(RawAnimation.begin().thenLoop(targetAnim));
             controller.transitionLength(configuredTransition);
+
         }
 
         return PlayState.CONTINUE;
