@@ -45,9 +45,7 @@ public class PacketInstructionKeyframe implements CustomPacketPayload {
         }
 
         AnimationKeyframeEvent event = new AnimationKeyframeEvent((ICustomNpc) NpcAPI.Instance().getIEntity(npc), player, packet.instruction);
-        if(GAEnumScriptType.ANIMATION_INSTRUCTION != null) {
-            npc.script.runScript(GAEnumScriptType.ANIMATION_INSTRUCTION, event);
-        }
+        GAEnumScriptType.runAnimationInstruction(npc.script, event);
     }
 
     @Override

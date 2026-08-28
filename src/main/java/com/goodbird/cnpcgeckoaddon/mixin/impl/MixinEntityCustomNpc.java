@@ -54,7 +54,9 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
 
         modelEntity.modelResLoc = ResourceLocation.parse(data.getModel());
         modelEntity.animResLoc = ResourceLocation.parse(data.getAnimFile());
-        modelEntity.textureResLoc = NpcTextureUtils.getNpcTexture(this);
+        if (level().isClientSide) {
+            modelEntity.textureResLoc = NpcTextureUtils.getNpcTexture(this);
+        }
         modelEntity.idleAnim = data.getIdleAnim();
         modelEntity.walkAnim = data.getWalkAnim();
         modelEntity.headBoneName = data.getHeadBoneName();

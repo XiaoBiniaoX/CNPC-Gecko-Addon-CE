@@ -36,8 +36,8 @@ public class NpcTextureUtils {
                     npc.textureLocation = ResourceDownloader.getUrlResourceLocation(npc.display.getSkinUrl(), fixSkin);
                     loadSkin(file, npc.textureLocation, npc.display.getSkinUrl(), fixSkin);
                 }
-                catch(Exception ex){
-                    ex.printStackTrace();
+                catch(Exception ignored){
+                    return DefaultPlayerSkin.getDefaultTexture();
                 }
             }
         }

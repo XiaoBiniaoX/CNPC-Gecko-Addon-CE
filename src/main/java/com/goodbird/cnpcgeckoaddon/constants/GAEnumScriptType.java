@@ -1,14 +1,20 @@
 package com.goodbird.cnpcgeckoaddon.constants;
 
-import noppes.npcs.constants.EnumScriptType;
+import noppes.npcs.controllers.ScriptContainer;
+import noppes.npcs.entity.data.DataScript;
 
-public class GAEnumScriptType {
-    public static EnumScriptType ANIMATION_INSTRUCTION;
-    static {
-        try {
-            ANIMATION_INSTRUCTION = EnumScriptType.valueOf("ANIMATION_INSTRUCTION");
-        } catch (Exception e) {
-            ANIMATION_INSTRUCTION = null;
+public final class GAEnumScriptType {
+    private static final String ANIMATION_INSTRUCTION_FUNCTION = "animationInstruction";
+
+    private GAEnumScriptType() {
+    }
+
+    public static void runAnimationInstruction(DataScript script, Object event) {
+        if (script == null || !script.isEnabled()) return;
+        for (ScriptContainer container : script.getScripts()) {
+            if (container != null) {
+                container.run(ANIMATION_INSTRUCTION_FUNCTION, event);
+            }
         }
     }
 }

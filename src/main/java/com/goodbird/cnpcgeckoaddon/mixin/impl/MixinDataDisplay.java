@@ -48,6 +48,7 @@ public class MixinDataDisplay implements IDataDisplay {
     @Unique
     public void setSkinTextureSeamless(String texture) {
         npc.display.setSkinTexture(texture);
+        if (!npc.level().isClientSide) return;
         if(npc instanceof EntityCustomNpc) {
             EntityCustomNpc customNpc = (EntityCustomNpc) npc;
             if(customNpc.modelData.getEntity(npc) instanceof EntityCustomModel) {
