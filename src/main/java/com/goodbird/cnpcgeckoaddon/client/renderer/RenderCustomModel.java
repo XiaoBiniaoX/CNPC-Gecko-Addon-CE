@@ -103,6 +103,20 @@ public class RenderCustomModel extends GeoEntityRenderer<EntityCustomModel> {
             animatable.tickCount=(int)(System.currentTimeMillis()/50);
         }
         super.defaultRender(poseStack, animatable, bufferSource, renderType, buffer, yaw, partialTick, packedLight);
+        renderOverlay(animatable, poseStack, bufferSource, yaw, partialTick, packedLight);
+    }
+
+    /** 附加材质只作为第二层贴图叠加，不替换主模型。 */
+    private void renderOverlay(EntityCustomModel animatable, PoseStack poseStack, MultiBufferSource bufferSource, float yaw, float partialTick, int packedLight) {
+        if (animatable.owner == null) return;
+        String overlayPath = animatable.owner.display.getOverlayTexture();
+        if (overlayPath == null || overlayPath.isEmpty()) return;
+        ResourceLocation overlayId = ResourceLocation.tryParse(overlayPath);
+        if (overlayId == null) return;
+        BakedGeoModel bakedModel = getGeoModel().getBakedModel(getGeoModel().getModelResource(animatable));
+        RenderType overlayType = RenderType.entityTranslucent(overlayId);
+        VertexConsumer overlayBuffer = bufferSource.getBuffer(overlayType);
+        reRender(bakedModel, poseStack, bufferSource, animatable, overlayType, overlayBuffer, yaw, (int)partialTick, packedLight, 1, 1, 1, 1);
     }
 
     public GeoBone[] getPathFromRoot(GeoBone bone) {
