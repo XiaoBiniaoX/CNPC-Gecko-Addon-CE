@@ -165,6 +165,9 @@ public class CustomModelData {
     public int getAttackCount() { return attackCount; }
     public void addAttack() {
         if (attackCount < MAX_ATTACKS) {
+            attackAnimNames[attackCount] = "";
+            attackWeights[attackCount] = 1;
+            attackFrames[attackCount] = 0;
             attackSoundNames[attackCount] = "";
             attackCount++;
         }
@@ -188,6 +191,8 @@ public class CustomModelData {
     public int getHurtAnimCount() { return hurtAnimCount; }
     public void addHurtAnim() {
         if (hurtAnimCount < MAX_HURTS) {
+            hurtAnimNames[hurtAnimCount] = "";
+            hurtWeights[hurtAnimCount] = 1;
             hurtSoundNames[hurtAnimCount] = "";
             hurtAnimCount++;
         }
@@ -209,7 +214,13 @@ public class CustomModelData {
     public float[] getDeathAnimDurations() { return deathAnimDurations; }
     public int getDeathAnimCount() { return deathAnimCount; }
     public void addDeathAnim() {
-        if (deathAnimCount < MAX_DEATHS) deathAnimCount++;
+        if (deathAnimCount < MAX_DEATHS) {
+            deathAnimNames[deathAnimCount] = "";
+            deathWeights[deathAnimCount] = 1;
+            deathHealthThresholds[deathAnimCount] = 100;
+            deathAnimDurations[deathAnimCount] = 5;
+            deathAnimCount++;
+        }
     }
     public void removeDeathAnim(int idx) {
         if (idx < 0 || idx >= deathAnimCount) return;

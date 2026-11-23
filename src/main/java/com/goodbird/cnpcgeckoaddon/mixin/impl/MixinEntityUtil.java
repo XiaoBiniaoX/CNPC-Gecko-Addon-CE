@@ -23,6 +23,7 @@ public class MixinEntityUtil {
         if (entity instanceof EntityCustomModel && copied instanceof EntityNPCInterface) {
             EntityCustomModel modelEntity = (EntityCustomModel) entity;
             EntityNPCInterface npc = (EntityNPCInterface) copied;
+            modelEntity.owner = npc;
             npc.noCulling = true;
             IDataDisplay display = (IDataDisplay) npc.display;
             CustomModelData data = display.getCustomModelData();

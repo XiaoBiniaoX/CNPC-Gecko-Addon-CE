@@ -1,6 +1,7 @@
 package com.goodbird.cnpcgeckoaddon.client.model;
 
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
+import com.goodbird.cnpcgeckoaddon.utils.NpcTextureUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import software.bernie.geckolib.cache.GeckoLibCache;
@@ -33,6 +34,8 @@ public class ModelCustom extends GeoModel<EntityCustomModel> {
         if(!GeckoLibCache.getBakedModels().containsKey(animatable.modelResLoc)){
             return ResourceLocation.fromNamespaceAndPath("cnpcgeckoaddon","textures/model/alphabet.png");
         }
+        // 下载/解析皮肤仅在客户端实际取材质时执行；脚本换肤下一次绘制即生效。
+        if (animatable.owner != null) animatable.textureResLoc = NpcTextureUtils.getNpcTexture(animatable.owner);
         return animatable.textureResLoc;
     }
 

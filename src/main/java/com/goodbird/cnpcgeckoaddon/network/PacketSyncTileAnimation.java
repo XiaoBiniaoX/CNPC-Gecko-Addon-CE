@@ -1,7 +1,7 @@
 package com.goodbird.cnpcgeckoaddon.network;
 
 import com.goodbird.cnpcgeckoaddon.tile.TileEntityCustomModel;
-import net.minecraft.client.Minecraft;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -69,15 +69,16 @@ public class PacketSyncTileAnimation implements CustomPacketPayload {
         return new PacketSyncTileAnimation(pos,builder);
     }
 
-    public static void handle(PacketSyncTileAnimation packet) {
-        BlockEntity entity = Minecraft.getInstance().player.getCommandSenderWorld().getBlockEntity(packet.pos);
+    public static void handle(PacketSyncTileAnimation packet, IPayloadContext context) {
+        BlockEntity entity = context.player().level().getBlockEntity(packet.pos);
         if(!(entity instanceof TileScripted)) return;
         TileScripted tile = (TileScripted) entity;
         if(tile.renderTile==null){
             tile.renderTile = new TileEntityCustomModel(tile);
         }
-        TileEntityCustomModel geckoTile = (TileEntityCustomModel) tile.renderTile;
-        geckoTile.manualAnim = packet.builder;
+        if (tile.renderTile instanceof TileEntityCustomModel geckoTile) {
+            geckoTile.manualAnim = packet.builder;
+        }
     }
 
     @Override
@@ -85,4 +86,3 @@ public class PacketSyncTileAnimation implements CustomPacketPayload {
         return new Type<>(ResourceLocation.parse("cnpcgeckoaddon:"+getClass().getSimpleName().toLowerCase()));
     }
 }
-

@@ -1,6 +1,6 @@
 package com.goodbird.cnpcgeckoaddon.network;
 
-import net.minecraft.client.Minecraft;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
@@ -29,8 +29,8 @@ public class PacketSyncTexture implements CustomPacketPayload {
         return new PacketSyncTexture(buf.readInt(), buf.readUtf());
     }
 
-    public static void handle(PacketSyncTexture packet) {
-        Entity entity = Minecraft.getInstance().player.getCommandSenderWorld().getEntity(packet.id);
+    public static void handle(PacketSyncTexture packet, IPayloadContext context) {
+        Entity entity = context.player().level().getEntity(packet.id);
         if(!(entity instanceof EntityCustomNpc npc)) return;
         npc.display.setSkinTexture(packet.texture);
     }

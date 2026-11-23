@@ -166,6 +166,15 @@ public class EntityCustomModel extends Animal implements GeoEntity {
         dims = EntityDimensions.scalable(width, height);
     }
 
+    public ResourceLocation getOverlayTexture() {
+        if (owner == null || owner.display.getOverlayTexture().isEmpty()) return null;
+        return ResourceLocation.tryParse(owner.display.getOverlayTexture());
+    }
+
+    public boolean isOverlayGlowing() {
+        return owner != null && owner.display.isOverlayGlowing();
+    }
+
     @Override
     public EntityDimensions getDimensions(Pose p_213305_1_) {
         if(dims==null){

@@ -3,7 +3,6 @@ package com.goodbird.cnpcgeckoaddon.mixin.impl;
 import com.goodbird.cnpcgeckoaddon.data.CustomModelData;
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
 import com.goodbird.cnpcgeckoaddon.mixin.IDataDisplay;
-import com.goodbird.cnpcgeckoaddon.utils.NpcTextureUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
@@ -54,9 +53,6 @@ public class MixinEntityCustomNpc extends EntityNPCInterface {
 
         modelEntity.modelResLoc = ResourceLocation.parse(data.getModel());
         modelEntity.animResLoc = ResourceLocation.parse(data.getAnimFile());
-        if (level().isClientSide) {
-            modelEntity.textureResLoc = NpcTextureUtils.getNpcTexture(this);
-        }
         modelEntity.idleAnim = data.getIdleAnim();
         modelEntity.walkAnim = data.getWalkAnim();
         modelEntity.headBoneName = data.getHeadBoneName();

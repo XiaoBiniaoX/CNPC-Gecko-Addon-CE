@@ -1,7 +1,7 @@
 package com.goodbird.cnpcgeckoaddon.network;
 
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
-import net.minecraft.client.Minecraft;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
@@ -42,8 +42,8 @@ public class PacketSyncAnimation implements CustomPacketPayload {
         return p;
     }
 
-    public static void handle(PacketSyncAnimation packet) {
-        Entity entity = Minecraft.getInstance().player.getCommandSenderWorld().getEntity(packet.id);
+    public static void handle(PacketSyncAnimation packet, IPayloadContext context) {
+        Entity entity = context.player().level().getEntity(packet.id);
         if(!(entity instanceof EntityCustomNpc npc)) return;
         if(npc.modelData==null || !(npc.modelData.getEntity(npc) instanceof EntityCustomModel)) return;
         EntityCustomModel em = (EntityCustomModel) npc.modelData.getEntity(npc);
