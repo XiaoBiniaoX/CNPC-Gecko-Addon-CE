@@ -19,6 +19,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.Locale;
+
 @Mixin(GuiCreationEntities.class)
 public class MixinGuiCreationEntities extends GuiCreationScreenInterface {
 
@@ -56,7 +58,7 @@ public class MixinGuiCreationEntities extends GuiCreationScreenInterface {
         drawSizeBoxes(graphics, px, py + viewH, pw, ph - viewH, data, gecko$preview);
     }
 
-    /** 宿主预览底部的两个 2D 对比框：A 模型包围盒，B NPC 真实碰撞箱。 */
+    /** A 为静态模型包围盒，B 为碰撞箱配置；同一比例下比较宽×高，单位为格。 */
     private void drawSizeBoxes(GuiGraphics graphics, int x, int y, int w, int h,
                                CustomModelData data, GeckoPreview preview) {
         float modelW = Math.max(0.01f, preview.modelWidth());
@@ -64,7 +66,7 @@ public class MixinGuiCreationEntities extends GuiCreationScreenInterface {
         float boxW = Math.max(0.01f, data.getWidth());
         float boxH = Math.max(0.01f, data.getHeight());
         float maxDim = Math.max(Math.max(modelW, modelH), Math.max(boxW, boxH));
-        float scale = Math.min((h - 14) / maxDim, (w / 2f - 12) / maxDim);
+        float scale = Math.min((h - 27) / maxDim, (w / 2f - 12) / maxDim);
 
         int boxAH = Math.max(2, Math.round(modelH * scale));
         int boxAW = Math.max(2, Math.round(modelW * scale));
@@ -79,15 +81,23 @@ public class MixinGuiCreationEntities extends GuiCreationScreenInterface {
         graphics.fill(leftX, baseY - 1, leftX + boxAW, baseY, 0xffffffff);
         graphics.fill(leftX, baseY - boxAH, leftX + 1, baseY, 0xffffffff);
         graphics.fill(leftX + boxAW - 1, baseY - boxAH, leftX + boxAW, baseY, 0xffffffff);
-        graphics.drawString(font, "A " + String.format("%.2f×%.2f", modelW, modelH),
+        graphics.drawString(font, font.plainSubstrByWidth("A " + GuiGeckoEditor.text("model_bounds"), w / 2 - 12),
                 leftX, y + 2, 0xffffff, false);
+        graphics.drawString(font, String.format(Locale.ROOT, "%.2f×%.2f ", modelW, modelH) + GuiGeckoEditor.text("blocks"),
+                leftX, y + 13, 0xffffff, false);
 
         graphics.fill(rightX, baseY - boxBH, rightX + boxBW, baseY, 0x6655ff55);
         graphics.fill(rightX, baseY - boxBH, rightX + boxBW, baseY - boxBH + 1, 0xff55ff55);
         graphics.fill(rightX, baseY - 1, rightX + boxBW, baseY, 0xff55ff55);
         graphics.fill(rightX, baseY - boxBH, rightX + 1, baseY, 0xff55ff55);
         graphics.fill(rightX + boxBW - 1, baseY - boxBH, rightX + boxBW, baseY, 0xff55ff55);
-        graphics.drawString(font, "B " + String.format("%.2f×%.2f", boxW, boxH),
+        graphics.drawString(font, font.plainSubstrByWidth("B " + GuiGeckoEditor.text("configured_hitbox"), w / 2 - 12),
                 rightX, y + 2, 0xaaffaa, false);
+        graphics.drawString(font, String.format(Locale.ROOT, "%.2f×%.2f ", boxW, boxH) + GuiGeckoEditor.text("blocks"),
+                rightX, y + 13, 0xaaffaa, false);
+        if (wrapper.mouseX >= x && wrapper.mouseX < x + w && wrapper.mouseY >= y && wrapper.mouseY < y + h) {
+            String help = GuiGeckoEditor.text(wrapper.mouseX < x + w / 2 ? "model_bounds_help" : "hitbox_size_help");
+            graphics.renderTooltip(font, font.split(net.minecraft.network.chat.Component.literal(help), 240), wrapper.mouseX, wrapper.mouseY);
+        }
     }
 }

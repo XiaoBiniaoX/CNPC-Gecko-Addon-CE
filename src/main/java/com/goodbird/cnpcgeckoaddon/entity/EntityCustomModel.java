@@ -462,6 +462,17 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
         this.noCulling = true;
     }
 
+    /** 渲染材质只读入口；界面展示实体可覆写，不必绑定真实 NPC。 */
+    @javax.annotation.Nullable
+    public ResourceLocation getOverlayTexture() {
+        String path = owner == null ? "" : owner.display.getOverlayTexture();
+        return path.isEmpty() ? null : ResourceLocation.tryParse(path);
+    }
+
+    public boolean isOverlayGlowing() {
+        return owner != null && owner.display.isOverlayGlowing();
+    }
+
     public void setSize(float width, float height) {
         dims = EntityDimensions.scalable(width, height);
     }

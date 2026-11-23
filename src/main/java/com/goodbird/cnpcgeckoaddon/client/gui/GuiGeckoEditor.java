@@ -3,13 +3,17 @@ package com.goodbird.cnpcgeckoaddon.client.gui;
 import com.goodbird.cnpcgeckoaddon.data.CustomModelData;
 import com.goodbird.cnpcgeckoaddon.mixin.IDataDisplay;
 import com.goodbird.cnpcgeckoaddon.utils.NpcTextureUtils;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraftforge.fml.ModList;
+import net.minecraftforge.resource.ResourcePackLoader;
 import noppes.npcs.client.gui.select.GuiSoundSelection;
 import noppes.npcs.client.gui.util.GuiNPCInterface;
 import noppes.npcs.entity.EntityNPCInterface;
@@ -22,17 +26,25 @@ import noppes.npcs.shared.client.util.AssetsFinder;
 import software.bernie.geckolib.cache.GeckoLibCache;
 import software.bernie.geckolib.loading.object.BakedAnimations;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 
 /** 原版控件的模型编辑台，资源浏览与设置共用右侧区域。 */
 public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListener {
     private static final int ANIM_ROW_H = 24;
-    private static final int GROUP_ROW_H = 22;
-    private static final int BROWSE_ROW_H = 20;
+    private static final int BROWSE_ROW_H = 22;
+    private static final int MODEL_ROW_H = 34;
+    private static final int MODEL_ROWS = 9;
+    private static final int SCROLL_GUTTER = 10;
 
     private int tab;
     private int section;
@@ -40,13 +52,16 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
     private int leftWidth, contentX, contentY, contentWidth, bottom, listTop, visibleRows;
     private GeckoPreview preview;
     private float rotation, zoom = 1;
-    private boolean rotating, draggingScroll;
+    private boolean rotating, draggingScroll, draggingDirectories;
+    private int modelOffset;
     private String message = "";
     private int browseTarget;
     private List<String> options = List.of();
     private List<String> filtered = List.of();
-    private List<String> groups = List.of();
-    private boolean groupView;
+    private List<Directory> directories = List.of(), allDirectories = List.of();
+    private final Set<String> expandedDirectories = new HashSet<>();
+    private final Map<String, ModLogo> modLogos = new HashMap<>();
+    private int directoryWidth, fileX, fileWidth, directoryOffset;
     private String browseNamespace = "";
     private String browsePath = "";
     private int browseOffset;
@@ -59,7 +74,7 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
 
     public GuiGeckoEditor(EntityNPCInterface npc, int tab) {
         super(npc);
-        this.tab = tab;
+        this.tab = tab == 1 ? 1 : 0;
         drawDefaultBackground = false;
     }
 
@@ -82,10 +97,9 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
         super.init();
         if (!normalizedDisplay) {
             normalizedDisplay = true;
-            // 皮肤只保留资源贴图；CNPC 的附加材质发光对 Gecko 模型无效，关闭它避免旧配置继续生效。
+            // 皮肤只保留资源贴图；附加材质的发光配置沿用 CNPC 原存档值。
             npc.display.skinType = 0;
             npc.textureLocation = null;
-            npc.display.setOverlayGlowing(false);
         }
         if (preview == null) preview = new GeckoPreview(npc);
         leftWidth = Math.max(92, imageWidth / 3);
@@ -98,11 +112,11 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
         animationSetters.clear();
         headerLabels.clear();
 
-        int tabWidth = (contentWidth - 4) / 3;
-        String[] tabs = {"model_material", "animations", "outer_extras"};
+        int tabWidth = (contentWidth - 2) / 2;
+        String[] tabs = {"model_material", "animations"};
         for (int i = 0; i < tabs.length; i++) {
             GuiButtonNop button = new GuiButtonNop(this, 800 + i, contentX + i * (tabWidth + 2), guiTop + 26,
-                    i == 2 ? contentWidth - 2 * (tabWidth + 2) : tabWidth, 20, text(tabs[i]));
+                    i == 1 ? contentWidth - tabWidth - 2 : tabWidth, 20, text(tabs[i]));
             button.active = i != tab;
             addButton(button);
         }
@@ -111,8 +125,7 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
         addButton(new GuiButtonNop(this, 811, guiLeft + 8, guiTop + imageHeight - 24, leftWidth - 4, 20, text("reset_view")));
         if (browseTarget != 0) createBrowser();
         else if (tab == 0) createModelPage();
-        else if (tab == 1) createAnimationPage();
-        else createExtrasPage();
+        else createAnimationPage();
     }
 
     private GuiTextFieldNop field(int id, int x, int y, int w, String value) {
@@ -123,17 +136,33 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
 
     private void resourceField(int id, int y, String label, String value) {
         addLabel(new GuiLabel(id, text(label), contentX, y, 0x404040));
-        field(id, contentX, y + 11, contentWidth - 36, value);
-        addButton(new GuiButtonNop(this, id, contentX + contentWidth - 32, y + 10, 32, 20, "..."));
+        field(id, contentX, y + 11, contentWidth - SCROLL_GUTTER - 36, value);
+        addButton(new GuiButtonNop(this, id, contentX + contentWidth - SCROLL_GUTTER - 32, y + 10, 32, 20, "..."));
     }
 
     private void createModelPage() {
-        int y = contentY;
-        resourceField(10, y, "outer_model", data().getModel());
-        resourceField(11, y + 40, "skin", npc.display.getSkinTexture());
-        resourceField(12, y + 80, "overlay", npc.display.getOverlayTexture());
-        addLabel(new GuiLabel(15, font.plainSubstrByWidth(text("skin_only"), contentWidth), contentX, y + 113, 0x777777));
-        addLabel(new GuiLabel(16, font.plainSubstrByWidth(text("overlay_hint"), contentWidth), contentX, y + 126, 0x777777));
+        listTop = contentY;
+        visibleRows = Math.max(1, (bottom - listTop) / MODEL_ROW_H);
+        modelOffset = Mth.clamp(modelOffset, 0, Math.max(0, MODEL_ROWS - visibleRows));
+        String[] labels = {"outer_model", "skin", "overlay", "overlay_glow", "head_bone", "transition_length", "hitbox_width", "hitbox_height", "hurt_tint"};
+        String[] values = {data().getModel(), npc.display.getSkinTexture(), npc.display.getOverlayTexture(),
+                "", data().getHeadBoneName(), "" + data().getTransitionLengthTicks(), "" + data().getWidth(), "" + data().getHeight()};
+        for (int row = 0; row < Math.min(visibleRows, MODEL_ROWS - modelOffset); row++) {
+            int index = modelOffset + row, y = listTop + row * MODEL_ROW_H;
+            if (index < 3) resourceField(10 + index, y, labels[index], values[index]);
+            else if (index == 3) {
+                addLabel(new GuiLabel(35, font.plainSubstrByWidth(text("overlay_glow"), contentWidth - SCROLL_GUTTER - 54), contentX, y + 8, 0x404040));
+                addButton(new GuiButtonYesNo(this, 35, contentX + contentWidth - SCROLL_GUTTER - 48, y + 2, 48, 20, npc.display.isOverlayGlowing()));
+            } else if (index < 8) {
+                int id = 30 + index - 4;
+                addLabel(new GuiLabel(id, text(labels[index]), contentX, y, 0x404040));
+                GuiTextFieldNop input = field(id, contentX, y + 11, contentWidth - SCROLL_GUTTER, values[index]);
+                if (id == 31) input.setNumbersOnly().setMinMaxDefault(0, Integer.MAX_VALUE, data().getTransitionLengthTicks());
+            } else {
+                addLabel(new GuiLabel(34, font.plainSubstrByWidth(text("hurt_tint"), contentWidth - SCROLL_GUTTER - 54), contentX, y + 8, 0x404040));
+                addButton(new GuiButtonYesNo(this, 34, contentX + contentWidth - SCROLL_GUTTER - 48, y + 2, 48, 20, data().isHurtTintEnabled()));
+            }
+        }
     }
 
     private void createAnimationPage() {
@@ -163,7 +192,7 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
     }
 
     private void createAnimationTable() {
-        listTop = contentY + 64;
+        listTop = contentY + 76;
         int rowH = ANIM_ROW_H;
         visibleRows = Math.max(1, (bottom - 24 - listTop) / rowH);
         offsets[section] = Mth.clamp(offsets[section], 0, Math.max(0, count() - visibleRows));
@@ -181,8 +210,9 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
             soundW = 18;
             secW = 22;
         }
+        if (section == 2) frameW = 0;
         int fixed = idxW + delW + weightW + frameW + soundW + gap * 4 + (section == 3 ? secW + gap : 0);
-        int nameW = Math.max(40, contentWidth - fixed);
+        int nameW = contentWidth - SCROLL_GUTTER - fixed;
         int nameX = contentX + idxW;
         int nameFieldW = Math.max(22, nameW - 20);
         int browseX = nameX + nameFieldW + 1;
@@ -190,13 +220,13 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
         int frameX = weightX + weightW + gap;
         int secX = frameX + frameW + gap;
         int soundX = (section == 3 ? secX + secW : frameX + frameW) + gap;
-        int delX = contentX + contentWidth - delW;
+        int delX = contentX + contentWidth - SCROLL_GUTTER - delW;
 
-        int headerY = listTop - 11;
+        int headerY = listTop - 13;
         graphicsLabel("#", contentX + 2, headerY);
         graphicsLabel(text("col_name"), nameX, headerY);
         graphicsLabel(text("short_weight"), weightX, headerY);
-        graphicsLabel(text(section == 1 ? "short_frame" : section == 3 ? "short_hp" : "short_weight"), frameX, headerY);
+        if (section != 2) graphicsLabel(text(section == 1 ? "short_frame" : "short_hp"), frameX, headerY);
         if (section == 3) graphicsLabel(text("seconds"), secX, headerY);
         graphicsLabel(text("short_sound"), soundX, headerY);
 
@@ -264,39 +294,6 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
         return section == 1 ? data().getAttackSoundNames() : data().getHurtSoundNames();
     }
 
-    private void createExtrasPage() {
-        int y = contentY;
-        sectionLabel("section_bone", y);
-        y += 16;
-        y = labeledField(30, y, "head_bone", data().getHeadBoneName());
-        y += 4;
-        sectionLabel("section_motion", y);
-        y += 16;
-        y = labeledField(31, y, "transition_length", "" + data().getTransitionLengthTicks());
-        getTextField(31).setNumbersOnly().setMinMaxDefault(0, Integer.MAX_VALUE, data().getTransitionLengthTicks());
-        y += 4;
-        sectionLabel("section_hitbox", y);
-        y += 16;
-        y = labeledField(32, y, "hitbox_width", "" + data().getWidth());
-        y = labeledField(33, y, "hitbox_height", "" + data().getHeight());
-        y += 4;
-        sectionLabel("section_hurt", y);
-        y += 16;
-        addLabel(new GuiLabel(34, font.plainSubstrByWidth(text("hurt_tint"), contentWidth - 52), contentX, y + 5, 0x404040));
-        addButton(new GuiButtonYesNo(this, 34, contentX + contentWidth - 48, y, 48, 20, data().isHurtTintEnabled()));
-    }
-
-    private void sectionLabel(String key, int y) {
-        addLabel(new GuiLabel(40 + y, "§7" + text(key), contentX, y, 0x555555));
-    }
-
-    private int labeledField(int id, int y, String label, String value) {
-        int fieldWidth = Math.min(86, contentWidth / 3);
-        addLabel(new GuiLabel(id, font.plainSubstrByWidth(text(label), contentWidth - fieldWidth - 4), contentX, y + 5, 0x404040));
-        field(id, contentX + contentWidth - fieldWidth, y, fieldWidth, value);
-        return y + 24;
-    }
-
     private BakedAnimations animationFile() {
         ResourceLocation id = ResourceLocation.tryParse(data().getAnimFile());
         return id == null ? null : GeckoLibCache.getBakedAnimations().get(id);
@@ -328,71 +325,89 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
         message = "";
         query = "";
         browseOffset = 0;
+        directoryOffset = 0;
+        expandedDirectories.clear();
+        browseNamespace = "";
+        browsePath = "";
         if (target == 10) {
             options = GeckoLibCache.getBakedModels().keySet().stream().map(Object::toString).sorted().toList();
-            groupView = true;
-            browseNamespace = "";
-            browsePath = "";
         } else if (target == 20) {
             options = GeckoLibCache.getBakedAnimations().keySet().stream().map(Object::toString).sorted().toList();
-            groupView = true;
-            browseNamespace = "";
-            browsePath = "";
         } else if (target == 11 || target == 12) {
             options = AssetsFinder.find("textures", ".png").stream().map(Object::toString).distinct().sorted().toList();
-            groupView = false;
             browseNamespace = "customnpcs";
             browsePath = target == 11 ? CnpclinesCompat.skinRoot() : CnpclinesCompat.overlayRoot();
         } else {
             BakedAnimations file = animationFile();
             options = file == null ? List.of() : file.animations().keySet().stream().sorted(String.CASE_INSENSITIVE_ORDER).toList();
-            groupView = false;
-            browseNamespace = "";
-            browsePath = "";
+        }
+        List<Directory> tree = new ArrayList<>();
+        tree.add(new Directory("", "", 0, false));
+        if (target == 10 || target == 11 || target == 12 || target == 20) {
+            List<String> namespaces = options.stream().map(this::namespaceOf).distinct()
+                    .sorted(Comparator.comparingInt(this::namespacePriority).thenComparing(String::compareTo)).toList();
+            for (String namespace : namespaces) {
+                Set<String> paths = new TreeSet<>(), parents = new HashSet<>();
+                for (String value : options) {
+                    if (!namespaceOf(value).equals(namespace)) continue;
+                    String path = pathOf(value);
+                    for (int slash = path.indexOf('/'); slash >= 0; slash = path.indexOf('/', slash + 1)) {
+                        paths.add(path.substring(0, slash + 1));
+                    }
+                }
+                for (String path : paths) parents.add(path.substring(0, path.lastIndexOf('/', path.length() - 2) + 1));
+                tree.add(new Directory(namespace, "", 0, !paths.isEmpty()));
+                for (String path : paths) {
+                    tree.add(new Directory(namespace, path, (int)path.chars().filter(c -> c == '/').count(), parents.contains(path)));
+                }
+            }
+        }
+        allDirectories = tree;
+        if (!browseNamespace.isEmpty()) {
+            expandedDirectories.add(browseNamespace + ":");
+            for (int slash = browsePath.indexOf('/'); slash >= 0; slash = browsePath.indexOf('/', slash + 1)) {
+                expandedDirectories.add(browseNamespace + ":" + browsePath.substring(0, slash + 1));
+            }
         }
         updateFiltered();
         init();
     }
 
+    private record Directory(String namespace, String path, int depth, boolean hasChildren) {
+        String key() { return namespace + ":" + path; }
+    }
+
     private void updateFiltered() {
         String q = query.trim().toLowerCase(Locale.ROOT);
-        if (groupView) {
-            List<String> namespaces = options.stream().map(this::namespaceOf).filter(value -> !value.isEmpty())
-                    .distinct().sorted(Comparator.comparingInt(this::namespacePriority).thenComparing(String::compareTo)).toList();
-            List<String> result = new ArrayList<>();
-            result.add("");
-            result.addAll(namespaces);
-            if (!q.isEmpty()) {
-                result.removeIf(ns -> !namespaceLabel(ns).toLowerCase(Locale.ROOT).contains(q) && !ns.contains(q));
-            }
-            groups = result;
-            browseOffset = Mth.clamp(browseOffset, 0, Math.max(0, groups.size() - visibleRows));
-        } else {
-            List<String> result = new ArrayList<>();
-            for (String value : options) {
-                if (!browseNamespace.isEmpty() && !namespaceOf(value).equals(browseNamespace)) continue;
-                if (!browsePath.isEmpty() && !pathOf(value).startsWith(browsePath)) continue;
-                if (!q.isEmpty() && !value.toLowerCase(Locale.ROOT).contains(q)) continue;
-                result.add(value);
-            }
-            filtered = result;
-            browseOffset = Mth.clamp(browseOffset, 0, Math.max(0, filtered.size() - visibleRows));
+        List<Directory> tree = new ArrayList<>();
+        Set<String> visible = new HashSet<>();
+        for (Directory directory : allDirectories) {
+            String parent = directory.namespace + ":" + directory.path.substring(0, directory.path.lastIndexOf('/', directory.path.length() - 2) + 1);
+            if (!directory.path.isEmpty() && (!visible.contains(parent) || !expandedDirectories.contains(parent))) continue;
+            tree.add(directory);
+            visible.add(directory.key());
         }
+        directories = tree;
+        directoryOffset = Mth.clamp(directoryOffset, 0, Math.max(0, directories.size() - visibleRows));
+        filtered = options.stream().filter(value -> browseNamespace.isEmpty() || namespaceOf(value).equals(browseNamespace))
+                .filter(value -> browsePath.isEmpty() || pathOf(value).startsWith(browsePath))
+                .filter(value -> q.isEmpty() || value.toLowerCase(Locale.ROOT).contains(q)).toList();
+        browseOffset = Mth.clamp(browseOffset, 0, Math.max(0, filtered.size() - visibleRows));
     }
 
     private void createBrowser() {
+        directoryWidth = Math.min(154, contentWidth * 2 / 5);
+        fileX = contentX + directoryWidth + 6;
+        fileWidth = contentWidth - directoryWidth - 6;
         addLabel(new GuiLabel(900, text("search"), contentX, contentY, 0x404040));
-        GuiTextFieldNop search = field(901, contentX + 36, contentY - 4, Math.max(40, contentWidth - 100), query);
+        GuiTextFieldNop search = field(901, contentX + 36, contentY - 4, contentWidth - 36, query);
         search.setResponder(value -> {
             query = value;
             browseOffset = 0;
             updateFiltered();
         });
-        addButton(new GuiButtonNop(this, 850, contentX + contentWidth - 58, contentY - 5, 58, 20,
-                text(groupView ? "all" : "mods")));
-        listTop = contentY + 26;
-        int rowHeight = groupView ? GROUP_ROW_H : BROWSE_ROW_H;
-        visibleRows = Math.max(1, (bottom - 70 - listTop) / rowHeight);
+        listTop = contentY + 36;
+        visibleRows = Math.max(1, (bottom - 70 - listTop) / BROWSE_ROW_H);
         updateFiltered();
         addLabel(new GuiLabel(902, text("value"), contentX, bottom - 65, 0x404040));
         GuiTextFieldNop input = field(902, contentX, bottom - 54, contentWidth, candidate);
@@ -407,7 +422,7 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
         int id = button.id;
         if (id == 810) { onClose(); return; }
         if (id == 811) { rotation = 0; zoom = 1; return; }
-        if (id >= 800 && id <= 802) {
+        if (id >= 800 && id <= 801) {
             browseTarget = 0;
             tab = id - 800;
             message = "";
@@ -422,14 +437,11 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
         } else if (id == 841) {
             browseTarget = 0;
             message = "";
-        } else if (id == 850) {
-            groupView = !groupView;
-            browseNamespace = "";
-            browsePath = "";
-            browseOffset = 0;
-            updateFiltered();
         } else if (id == 34) {
             data().setHurtTintEnabled(((GuiButtonYesNo)button).getBoolean());
+        } else if (id == 35) {
+            npc.display.setOverlayGlowing(((GuiButtonYesNo)button).getBoolean());
+            npc.updateClient = true;
         } else if (id == 830) {
             if (section == 1) data().addAttack();
             else if (section == 2) data().addHurtAnim();
@@ -444,7 +456,8 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
             int index = id - 600;
             String sound = sounds()[index];
             String safe = sound != null && ResourceLocation.tryParse(sound) != null ? sound : "";
-            setSubGui(new SoundPicker(safe, value -> sounds()[index] = value));
+            Minecraft client = Minecraft.getInstance();
+            client.setScreen(new SoundPicker(safe, value -> sounds()[index] = value, client.screen));
             return;
         } else if (id >= 300 && id < 320) {
             openBrowser(100 + id - 300);
@@ -575,8 +588,8 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
             }
             if (tab == 1 && section != 0) {
                 renderAnimationRows(graphics, mouseX, mouseY);
-                renderScrollBar(graphics, count(), offsets[section], ANIM_ROW_H);
-            }
+                renderScrollBar(graphics, contentX + contentWidth - 6, count(), offsets[section], ANIM_ROW_H);
+            } else if (tab == 0) renderScrollBar(graphics, contentX + contentWidth - 6, MODEL_ROWS, modelOffset, MODEL_ROW_H);
         }
         if (!message.isEmpty()) graphics.drawString(font, font.plainSubstrByWidth(message, contentWidth - 80), contentX, guiTop + imageHeight - 17, 0xaa2222, false);
         super.render(graphics, mouseX, mouseY, partialTicks);
@@ -601,19 +614,26 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
                 }
             }
         } else if (browseTarget != 0) {
-            if (mouseX >= contentX && mouseX < contentX + contentWidth - 8
-                    && mouseY >= listTop && mouseY < listTop + visibleRows * (groupView ? GROUP_ROW_H : BROWSE_ROW_H)) {
-                int index = browseOffset + (mouseY - listTop) / (groupView ? GROUP_ROW_H : BROWSE_ROW_H);
-                if (groupView && index < groups.size()) tooltip = namespaceLabel(groups.get(index));
-                else if (!groupView && index < filtered.size()) tooltip = filtered.get(index);
+            if (mouseY >= listTop && mouseY < listTop + visibleRows * BROWSE_ROW_H) {
+                int row = (mouseY - listTop) / BROWSE_ROW_H;
+                if (mouseX >= contentX && mouseX < contentX + directoryWidth - SCROLL_GUTTER && directoryOffset + row < directories.size()) {
+                    Directory directory = directories.get(directoryOffset + row);
+                    tooltip = namespaceLabel(directory.namespace) + (directory.path.isEmpty() ? "" : ": " + directory.path);
+                } else if (mouseX >= fileX && mouseX < fileX + fileWidth - SCROLL_GUTTER && browseOffset + row < filtered.size()) {
+                    tooltip = filtered.get(browseOffset + row);
+                }
             }
-        } else if (tab == 2) {
+        } else if (tab == 0) {
             for (GuiTextFieldNop field : wrapper.textfields.values()) {
                 if (!field.isMouseOver(mouseX, mouseY)) continue;
-                if (field.id == 30) tooltip = text("head_bone");
+                if (field.id == 11) tooltip = text("skin_only");
+                else if (field.id == 12) tooltip = text("overlay_hint");
+                else if (field.id == 30) tooltip = text("head_bone");
                 else if (field.id == 31) tooltip = text("transition_length");
                 else if (field.id == 32 || field.id == 33) tooltip = text("hitbox_help");
             }
+            GuiButtonNop glow = getButton(35);
+            if (glow != null && glow.isMouseOver(mouseX, mouseY)) tooltip = text("overlay_glow_hint");
         }
         if (mouseX >= px && mouseX < px + pw && mouseY >= py && mouseY < py + ph) tooltip = text("view_help");
         if (!tooltip.isEmpty()) graphics.renderTooltip(font, font.split(Component.literal(tooltip), Math.min(260, width - 20)), mouseX, mouseY);
@@ -628,38 +648,45 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
     }
 
     private void renderBrowser(GuiGraphics graphics, int mouseX, int mouseY) {
-        int rowHeight = groupView ? GROUP_ROW_H : BROWSE_ROW_H;
-        graphics.fill(contentX, listTop, contentX + contentWidth, listTop + visibleRows * rowHeight, 0xff202020);
-        String scope = groupView ? text("select_mod") : namespaceLabel(browseNamespace)
-                + (browsePath.isEmpty() ? "" : " : " + browsePath);
-        graphics.drawString(font, font.plainSubstrByWidth(scope, contentWidth - 8), contentX, listTop - 10, 0x666666, false);
-        if (groupView) {
-            for (int row = 0; row < Math.min(visibleRows, groups.size() - browseOffset); row++) {
-                String namespace = groups.get(browseOffset + row);
-                int y = listTop + row * rowHeight;
-                boolean hover = mouseX >= contentX && mouseX < contentX + contentWidth - 8 && mouseY >= y && mouseY < y + rowHeight;
-                boolean selected = namespace.equals(browseNamespace);
-                if (hover || selected) graphics.fill(contentX + 1, y + 1, contentX + contentWidth - 8, y + rowHeight - 1,
-                        selected ? 0xff555555 : 0xff383838);
-                drawModIcon(graphics, namespace, contentX + 4, y + 3);
-                graphics.drawString(font, font.plainSubstrByWidth(namespaceLabel(namespace), contentWidth - 60), contentX + 24, y + 7, 0xffffff, false);
-                String count = "" + namespaceCount(namespace);
-                graphics.drawString(font, count, contentX + contentWidth - 12 - font.width(count), y + 7, 0xaaaaaa, false);
+        int rowHeight = BROWSE_ROW_H;
+        graphics.fill(contentX, listTop, contentX + directoryWidth, listTop + visibleRows * rowHeight, 0xff202020);
+        graphics.fill(fileX, listTop, fileX + fileWidth, listTop + visibleRows * rowHeight, 0xff202020);
+        graphics.drawString(font, text("directories"), contentX, listTop - 12, 0x666666, false);
+        String scope = namespaceLabel(browseNamespace) + (browsePath.isEmpty() ? "" : ": " + browsePath);
+        graphics.drawString(font, font.plainSubstrByWidth(scope, fileWidth - 8), fileX, listTop - 12, 0x666666, false);
+        for (int row = 0; row < Math.min(visibleRows, directories.size() - directoryOffset); row++) {
+            Directory directory = directories.get(directoryOffset + row);
+            int y = listTop + row * rowHeight;
+            boolean hover = mouseX >= contentX && mouseX < contentX + directoryWidth - SCROLL_GUTTER && mouseY >= y && mouseY < y + rowHeight;
+            boolean selected = directory.namespace.equals(browseNamespace) && directory.path.equals(browsePath);
+            if (hover || selected) graphics.fill(contentX + 1, y + 1, contentX + directoryWidth - SCROLL_GUTTER, y + rowHeight - 1,
+                    selected ? 0xff555555 : 0xff383838);
+            int x = contentX + 3 + Math.min(directory.depth, 3) * 8;
+            if (directory.hasChildren) graphics.drawString(font, expandedDirectories.contains(directory.key()) ? "-" : "+", x, y + 7, 0xaaaaaa, false);
+            x += 9;
+            String name;
+            if (directory.path.isEmpty()) {
+                drawModIcon(graphics, directory.namespace, x, y + 3);
+                x += 19;
+                name = namespaceLabel(directory.namespace);
+            } else {
+                graphics.fill(x, y + 6, x + 8, y + 14, 0xffc6a256);
+                x += 11;
+                name = directory.path.substring(directory.path.lastIndexOf('/', directory.path.length() - 2) + 1, directory.path.length() - 1);
             }
-            if (groups.isEmpty()) graphics.drawString(font, text("no_results"), contentX + 5, listTop + 7, 0xaaaaaa, false);
-            renderScrollBar(graphics, groups.size(), browseOffset, GROUP_ROW_H);
-        } else {
-            for (int row = 0; row < Math.min(visibleRows, filtered.size() - browseOffset); row++) {
-                String option = filtered.get(browseOffset + row);
-                int y = listTop + row * rowHeight;
-                boolean hover = mouseX >= contentX && mouseX < contentX + contentWidth - 8 && mouseY >= y && mouseY < y + rowHeight && wrapper.subgui == null;
-                if (option.equals(candidate) || hover) graphics.fill(contentX + 1, y + 1, contentX + contentWidth - 8, y + rowHeight - 1,
-                        option.equals(candidate) ? 0xff555555 : 0xff383838);
-                graphics.drawString(font, font.plainSubstrByWidth(label(option), contentWidth - 16), contentX + 4, y + 6, 0xffffff, false);
-            }
-            if (filtered.isEmpty()) graphics.drawString(font, text("no_results"), contentX + 5, listTop + 7, 0xaaaaaa, false);
-            renderScrollBar(graphics, filtered.size(), browseOffset, BROWSE_ROW_H);
+            graphics.drawString(font, font.plainSubstrByWidth(name, contentX + directoryWidth - SCROLL_GUTTER - x - 2), x, y + 7, 0xffffff, false);
         }
+        for (int row = 0; row < Math.min(visibleRows, filtered.size() - browseOffset); row++) {
+            String option = filtered.get(browseOffset + row);
+            int y = listTop + row * rowHeight;
+            boolean hover = mouseX >= fileX && mouseX < fileX + fileWidth - SCROLL_GUTTER && mouseY >= y && mouseY < y + rowHeight;
+            if (option.equals(candidate) || hover) graphics.fill(fileX + 1, y + 1, fileX + fileWidth - SCROLL_GUTTER, y + rowHeight - 1,
+                    option.equals(candidate) ? 0xff555555 : 0xff383838);
+            graphics.drawString(font, font.plainSubstrByWidth(label(option), fileWidth - SCROLL_GUTTER - 8), fileX + 4, y + 7, 0xffffff, false);
+        }
+        if (filtered.isEmpty()) graphics.drawString(font, font.plainSubstrByWidth(text("no_results"), fileWidth - SCROLL_GUTTER - 8), fileX + 4, listTop + 7, 0xaaaaaa, false);
+        renderScrollBar(graphics, contentX + directoryWidth - 6, directories.size(), directoryOffset, rowHeight);
+        renderScrollBar(graphics, fileX + fileWidth - 6, filtered.size(), browseOffset, rowHeight);
         if (browseTarget == 11 || browseTarget == 12) {
             ResourceLocation texture = ResourceLocation.tryParse(candidate);
             if (texture != null) {
@@ -675,33 +702,45 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
     }
 
     private void drawModIcon(GuiGraphics graphics, String namespace, int x, int y) {
-        ResourceLocation logo = CnpclinesCompat.logo(namespace);
-        if (logo != null && namespaceExists(logo)) {
-            graphics.blit(logo, x, y, 0, 0, 16, 16, 16, 16);
+        if (!modLogos.containsKey(namespace)) {
+            ModLogo logo = null;
+            var info = ModList.get().getModContainerById(namespace).map(container -> container.getModInfo()).orElse(null);
+            var pack = ResourcePackLoader.getPackFor(namespace).orElse(null);
+            if (info != null && pack != null && info.getLogoFile().isPresent()) {
+                var source = pack.getRootResource(info.getLogoFile().get().split("/"));
+                if (source != null) {
+                    try (var stream = source.get()) {
+                        NativeImage image = NativeImage.read(stream);
+                        int w = image.getWidth(), h = image.getHeight();
+                        ResourceLocation texture = Minecraft.getInstance().getTextureManager().register("gecko_modlogo", new DynamicTexture(image));
+                        logo = new ModLogo(texture, w, h);
+                    } catch (IOException ignored) {
+                        // 缺失或损坏的模组图片使用名称标记，不影响资源选择。
+                    }
+                }
+            }
+            modLogos.put(namespace, logo);
+        }
+        ModLogo logo = modLogos.get(namespace);
+        if (logo != null) {
+            float scale = 16f / Math.max(logo.width, logo.height);
+            int w = Math.max(1, Math.round(logo.width * scale)), h = Math.max(1, Math.round(logo.height * scale));
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
+            graphics.blit(logo.texture, x + (16 - w) / 2, y + (16 - h) / 2, w, h, 0, 0, logo.width, logo.height, logo.width, logo.height);
+            RenderSystem.disableBlend();
             return;
         }
         graphics.fill(x, y, x + 16, y + 16, 0xff3a3a3a);
         graphics.fill(x, y, x + 16, y + 1, 0xff777777);
-        graphics.drawString(font, "?", x + 6, y + 4, 0xffffff, false);
+        graphics.drawString(font, namespace.isEmpty() ? "=" : namespace.substring(0, 1).toUpperCase(Locale.ROOT), x + 5, y + 4, 0xffffff, false);
     }
 
-    private boolean namespaceExists(ResourceLocation location) {
-        try {
-            return Minecraft.getInstance().getResourceManager().getResource(location).isPresent();
-        } catch (Exception ignored) {
-            return false;
-        }
+    private record ModLogo(ResourceLocation texture, int width, int height) {
     }
 
     private String namespaceLabel(String namespace) {
         return namespace.isEmpty() ? text("all") : CnpclinesCompat.displayName(namespace);
-    }
-
-    private int namespaceCount(String namespace) {
-        if (namespace.isEmpty()) return options.size();
-        int count = 0;
-        for (String value : options) if (namespaceOf(value).equals(namespace)) count++;
-        return count;
     }
 
     private int namespacePriority(String namespace) {
@@ -723,12 +762,12 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
 
     private String label(String value) {
         if (browseNamespace.isEmpty()) return value;
-        return pathOf(value);
+        return pathOf(value).substring(browsePath.length());
     }
 
-    private void renderScrollBar(GuiGraphics graphics, int count, int offset, int rowHeight) {
+    private void renderScrollBar(GuiGraphics graphics, int x, int count, int offset, int rowHeight) {
         if (count <= visibleRows) return;
-        int x = contentX + contentWidth - 6, h = visibleRows * rowHeight;
+        int h = visibleRows * rowHeight;
         graphics.fill(x, listTop, x + 6, listTop + h, 0xff555555);
         int thumb = Math.max(10, h * visibleRows / count);
         int y = listTop + (h - thumb) * offset / (count - visibleRows);
@@ -742,15 +781,18 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
             zoom = Mth.clamp(zoom * (float)Math.pow(1.12, delta), 0.1f, 8);
             return true;
         }
-        int rowHeight = browseTarget != 0 ? (groupView ? GROUP_ROW_H : BROWSE_ROW_H) : ANIM_ROW_H;
+        int rowHeight = browseTarget != 0 ? BROWSE_ROW_H : tab == 0 ? MODEL_ROW_H : ANIM_ROW_H;
         if (x >= contentX && x < contentX + contentWidth && y >= listTop
                 && y < listTop + visibleRows * rowHeight
-                && (browseTarget != 0 || tab == 1 && section != 0)) {
+                && (browseTarget != 0 || tab == 0 || section != 0)) {
             GuiTextFieldNop.unfocus();
             int step = delta > 0 ? -1 : 1;
             if (browseTarget != 0) {
-                int max = Math.max(0, (groupView ? groups.size() : filtered.size()) - visibleRows);
-                browseOffset = Mth.clamp(browseOffset + step, 0, max);
+                if (x < contentX + directoryWidth) directoryOffset = Mth.clamp(directoryOffset + step, 0, Math.max(0, directories.size() - visibleRows));
+                else if (x >= fileX) browseOffset = Mth.clamp(browseOffset + step, 0, Math.max(0, filtered.size() - visibleRows));
+            } else if (tab == 0) {
+                modelOffset = Mth.clamp(modelOffset + step, 0, Math.max(0, MODEL_ROWS - visibleRows));
+                init();
             } else {
                 offsets[section] = Mth.clamp(offsets[section] + step, 0, Math.max(0, count() - visibleRows));
                 init();
@@ -768,45 +810,61 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
             rotating = true;
             return true;
         }
-        int rowHeight = browseTarget != 0 ? (groupView ? GROUP_ROW_H : BROWSE_ROW_H) : ANIM_ROW_H;
-        if (button == 0 && (browseTarget != 0 || tab == 1 && section != 0)) {
-            if (x >= contentX + contentWidth - 6 && x < contentX + contentWidth && y >= listTop && y < listTop + visibleRows * rowHeight) {
-                draggingScroll = true;
-                scrollTo(y, rowHeight);
-                return true;
-            }
-            if (browseTarget != 0 && x >= contentX && x < contentX + contentWidth - 8 && y >= listTop && y < listTop + visibleRows * rowHeight) {
-                int index = browseOffset + (int)(y - listTop) / rowHeight;
-                if (groupView) {
-                    if (index < groups.size()) enterGroup(groups.get(index));
-                } else if (index < filtered.size()) {
-                    candidate = filtered.get(index);
-                    getTextField(902).setValue(candidate);
-                    message = "";
+        int rowHeight = browseTarget != 0 ? BROWSE_ROW_H : tab == 0 ? MODEL_ROW_H : ANIM_ROW_H;
+        if (button == 0 && (browseTarget != 0 || tab == 0 || section != 0) && y >= listTop && y < listTop + visibleRows * rowHeight) {
+            boolean directoryBar = browseTarget != 0 && x >= contentX + directoryWidth - 6 && x < contentX + directoryWidth;
+            if (directoryBar || x >= contentX + contentWidth - 6 && x < contentX + contentWidth) {
+                int size = browseTarget != 0 ? (directoryBar ? directories.size() : filtered.size()) : tab == 0 ? MODEL_ROWS : count();
+                if (size > visibleRows) {
+                    draggingScroll = true;
+                    draggingDirectories = directoryBar;
+                    scrollTo(y, rowHeight);
                 }
                 return true;
+            }
+            if (browseTarget != 0) {
+                int row = (int)(y - listTop) / rowHeight;
+                if (x >= contentX && x < contentX + directoryWidth - SCROLL_GUTTER) {
+                    int index = directoryOffset + row;
+                    if (index < directories.size()) {
+                        GuiTextFieldNop.unfocus();
+                        Directory directory = directories.get(index);
+                        int arrowX = contentX + 3 + Math.min(directory.depth, 3) * 8;
+                        if (directory.hasChildren && x < arrowX + 9) {
+                            if (!expandedDirectories.remove(directory.key())) expandedDirectories.add(directory.key());
+                        } else {
+                            browseNamespace = directory.namespace;
+                            browsePath = directory.path;
+                            browseOffset = 0;
+                            expandedDirectories.add(directory.key());
+                        }
+                        updateFiltered();
+                    }
+                    return true;
+                }
+                if (x >= fileX && x < fileX + fileWidth - SCROLL_GUTTER) {
+                    int index = browseOffset + row;
+                    if (index < filtered.size()) {
+                        GuiTextFieldNop.unfocus();
+                        candidate = filtered.get(index);
+                        getTextField(902).setValue(candidate);
+                        message = "";
+                    }
+                    return true;
+                }
             }
         }
         return super.mouseClicked(x, y, button);
     }
 
-    private void enterGroup(String namespace) {
-        browseNamespace = namespace;
-        browsePath = namespace.equals("customnpcs") && (browseTarget == 11 || browseTarget == 12)
-                ? (browseTarget == 11 ? CnpclinesCompat.skinRoot() : CnpclinesCompat.overlayRoot()) : "";
-        groupView = false;
-        browseOffset = 0;
-        query = "";
-        if (getTextField(901) != null) getTextField(901).setValue("");
-        updateFiltered();
-        init();
-    }
-
     private void scrollTo(double y, int rowHeight) {
         GuiTextFieldNop.unfocus();
-        int max = Math.max(0, (browseTarget != 0 ? (groupView ? groups.size() : filtered.size()) : count()) - visibleRows);
+        int max = Math.max(0, (browseTarget != 0 ? (draggingDirectories ? directories.size() : filtered.size()) : tab == 0 ? MODEL_ROWS : count()) - visibleRows);
         int offset = Mth.clamp((int)Math.round((y - listTop) / (visibleRows * rowHeight) * max), 0, max);
-        if (browseTarget != 0) browseOffset = offset;
+        if (browseTarget != 0) {
+            if (draggingDirectories) directoryOffset = offset;
+            else browseOffset = offset;
+        } else if (tab == 0) { modelOffset = offset; init(); }
         else { offsets[section] = offset; init(); }
     }
 
@@ -814,7 +872,7 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
     public boolean mouseDragged(double x, double y, int button, double dx, double dy) {
         if (wrapper.subgui != null) return super.mouseDragged(x, y, button, dx, dy);
         if (rotating) { rotation += (float)dx * 2; return true; }
-        if (draggingScroll) { scrollTo(y, browseTarget != 0 ? (groupView ? GROUP_ROW_H : BROWSE_ROW_H) : ANIM_ROW_H); return true; }
+        if (draggingScroll) { scrollTo(y, browseTarget != 0 ? BROWSE_ROW_H : tab == 0 ? MODEL_ROW_H : ANIM_ROW_H); return true; }
         return super.mouseDragged(x, y, button, dx, dy);
     }
 
@@ -822,6 +880,7 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
     public boolean mouseReleased(double x, double y, int button) {
         rotating = false;
         draggingScroll = false;
+        draggingDirectories = false;
         return super.mouseReleased(x, y, button);
     }
 
@@ -841,7 +900,13 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
             browseTarget = 0;
             message = "";
             init();
-        } else super.onClose();
+        } else {
+            for (ModLogo logo : modLogos.values()) {
+                if (logo != null) Minecraft.getInstance().getTextureManager().release(logo.texture);
+            }
+            modLogos.clear();
+            super.onClose();
+        }
     }
 
     @Override
@@ -851,16 +916,19 @@ public class GuiGeckoEditor extends GuiNPCInterface implements ITextfieldListene
 
     private static final class SoundPicker extends GuiSoundSelection {
         private final Consumer<String> action;
+        private final Screen returnScreen;
 
-        SoundPicker(String current, Consumer<String> action) {
+        SoundPicker(String current, Consumer<String> action, Screen returnScreen) {
             super(current);
             this.action = action;
+            this.returnScreen = returnScreen;
+            drawDefaultBackground = true;
         }
 
         @Override
-        public void close() {
+        public void onClose() {
             if (selectedResource != null) action.accept(selectedResource.toString());
-            super.close();
+            Minecraft.getInstance().setScreen(returnScreen);
         }
     }
 }

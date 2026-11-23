@@ -8,6 +8,8 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
+import java.util.Optional;
+
 public class NetworkWrapper {
     private static final String PROTOCOL = "10";
     public static final SimpleChannel wrapper = NetworkRegistry.newSimpleChannel(
@@ -19,10 +21,10 @@ public class NetworkWrapper {
 
 
     public static void init() {
-        wrapper.registerMessage(0,PacketSyncAnimation.class,PacketSyncAnimation::encode,PacketSyncAnimation::decode,PacketSyncAnimation::handle);
-        wrapper.registerMessage(1,PacketSyncTileAnimation.class,PacketSyncTileAnimation::encode,PacketSyncTileAnimation::decode,PacketSyncTileAnimation::handle);
-        wrapper.registerMessage(2,PacketSyncTexture.class,PacketSyncTexture::encode,PacketSyncTexture::decode,PacketSyncTexture::handle);
-        wrapper.registerMessage(3,PacketInstructionKeyframe.class,PacketInstructionKeyframe::encode,PacketInstructionKeyframe::decode,PacketInstructionKeyframe::handle);
+        wrapper.registerMessage(0,PacketSyncAnimation.class,PacketSyncAnimation::encode,PacketSyncAnimation::decode,PacketSyncAnimation::handle,Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        wrapper.registerMessage(1,PacketSyncTileAnimation.class,PacketSyncTileAnimation::encode,PacketSyncTileAnimation::decode,PacketSyncTileAnimation::handle,Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        wrapper.registerMessage(2,PacketSyncTexture.class,PacketSyncTexture::encode,PacketSyncTexture::decode,PacketSyncTexture::handle,Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        wrapper.registerMessage(3,PacketInstructionKeyframe.class,PacketInstructionKeyframe::encode,PacketInstructionKeyframe::decode,PacketInstructionKeyframe::handle,Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 
     public static void sendToServer(Object message) {

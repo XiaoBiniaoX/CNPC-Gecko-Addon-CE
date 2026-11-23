@@ -2,12 +2,16 @@ package com.goodbird.cnpcgeckoaddon.client.renderer;
 
 import com.goodbird.cnpcgeckoaddon.client.model.ModelCustom;
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.math.Axis;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.ItemTransforms;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
@@ -15,6 +19,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.Util;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.item.ItemDisplayContext;
@@ -27,6 +32,7 @@ import software.bernie.geckolib.util.RenderUtils;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.function.BiFunction;
 
 public class RenderCustomModel extends GeoEntityRenderer<EntityCustomModel> {
     boolean tickManually;
@@ -103,20 +109,43 @@ public class RenderCustomModel extends GeoEntityRenderer<EntityCustomModel> {
             animatable.tickCount=(int)(System.currentTimeMillis()/50);
         }
         super.defaultRender(poseStack, animatable, bufferSource, renderType, buffer, yaw, partialTick, packedLight);
-        renderOverlay(animatable, poseStack, bufferSource, yaw, partialTick, packedLight);
     }
 
-    /** 附加材质只作为第二层贴图叠加，不替换主模型。 */
-    private void renderOverlay(EntityCustomModel animatable, PoseStack poseStack, MultiBufferSource bufferSource, float yaw, float partialTick, int packedLight) {
-        if (animatable.owner == null) return;
-        String overlayPath = animatable.owner.display.getOverlayTexture();
-        if (overlayPath == null || overlayPath.isEmpty()) return;
-        ResourceLocation overlayId = ResourceLocation.tryParse(overlayPath);
+    /** 趁主渲染的实体与缩放姿态仍有效时叠加，不能在 defaultRender 返回后重画。 */
+    @Override
+    public void applyRenderLayers(PoseStack poseStack, EntityCustomModel animatable, BakedGeoModel bakedModel, RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer, float partialTick, int packedLight, int packedOverlay) {
+        super.applyRenderLayers(poseStack, animatable, bakedModel, renderType, bufferSource, buffer, partialTick, packedLight, packedOverlay);
+        ResourceLocation overlayId = animatable.getOverlayTexture();
         if (overlayId == null) return;
-        BakedGeoModel bakedModel = getGeoModel().getBakedModel(getGeoModel().getModelResource(animatable));
-        RenderType overlayType = RenderType.entityTranslucent(overlayId);
+        // 固定和普通缓冲都先提交主层，避免同一片元的主贴图晚于附加层绘制。
+        if (bufferSource instanceof MultiBufferSource.BufferSource source) source.endBatch(renderType);
+        boolean emissive = animatable.isOverlayGlowing();
+        RenderType overlayType = OverlayRenderTypes.TYPES.apply(overlayId, emissive);
         VertexConsumer overlayBuffer = bufferSource.getBuffer(overlayType);
-        reRender(bakedModel, poseStack, bufferSource, animatable, overlayType, overlayBuffer, yaw, (int)partialTick, packedLight, 1, 1, 1, 1);
+        reRender(bakedModel, poseStack, bufferSource, animatable, overlayType, overlayBuffer, partialTick,
+                emissive ? LightTexture.FULL_BRIGHT : packedLight, packedOverlay, 1, 1, 1, 1);
+    }
+
+    /** 原版状态组合：共面偏移只影响深度比较，不改变模型几何或 PoseStack。 */
+    private static final class OverlayRenderTypes extends RenderStateShard {
+        private OverlayRenderTypes() {
+            super("cnpcgeckoaddon_overlay", () -> {}, () -> {});
+        }
+
+        private static final BiFunction<ResourceLocation, Boolean, RenderType> TYPES = Util.memoize((texture, emissive) ->
+                RenderType.create(emissive ? "cnpcgeckoaddon_overlay_emissive" : "cnpcgeckoaddon_overlay_translucent",
+                        DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 256, false, true,
+                        RenderType.CompositeState.builder()
+                                .setShaderState(emissive ? RENDERTYPE_ENTITY_TRANSLUCENT_EMISSIVE_SHADER : RENDERTYPE_ENTITY_TRANSLUCENT_SHADER)
+                                .setTextureState(new TextureStateShard(texture, false, false))
+                                .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                                .setCullState(NO_CULL)
+                                .setDepthTestState(LEQUAL_DEPTH_TEST)
+                                .setWriteMaskState(COLOR_WRITE)
+                                .setLightmapState(emissive ? NO_LIGHTMAP : LIGHTMAP)
+                                .setOverlayState(OVERLAY)
+                                .setLayeringState(POLYGON_OFFSET_LAYERING)
+                                .createCompositeState(true)));
     }
 
     public GeoBone[] getPathFromRoot(GeoBone bone) {

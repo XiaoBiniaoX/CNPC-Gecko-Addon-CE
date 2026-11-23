@@ -5,7 +5,6 @@
   "refmap": "mixins.cnpcgeckoaddon.refmap.json",
   "mixins": [
     "AnimControllerAccessor",
-    "GeoModelAccessor",
     "MixinBlockScriptedWrapper",
     "MixinDataDisplay",
     "MixinItemScriptedWrapper",
@@ -20,7 +19,9 @@
     "TileScriptedMixin"
   ],
   "client": [
+    "GeoModelAccessor",
     "ClientMixinDataDisplay",
+    "ClientMixinEntityUtil",
     "MixinAnimationController",
     "MixinBlockScriptedRenderer",
     "MixinGuiCreationEntities",

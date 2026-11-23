@@ -7,6 +7,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 import noppes.npcs.blocks.tiles.TileScripted;
 
@@ -42,9 +45,14 @@ public class PacketSyncTileAnimation {
 
     public static void handle(PacketSyncTileAnimation packet, Supplier<NetworkEvent.Context> ctx) {
         NetworkEvent.Context context = ctx.get();
-        context.enqueueWork(() -> {
-            // 不能直接用 Minecraft.getInstance().level：字段类型 ClientLevel 带 @OnlyIn(CLIENT)，服务器加载会崩。
-            // player 在加入/离开世界窗口时为 null，需先判空。
+        context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientHandler.handle(packet)));
+        context.setPacketHandled(true);
+    }
+
+    /** 渲染方块实体的创建与动画赋值只在客户端进行。 */
+    @OnlyIn(Dist.CLIENT)
+    private static class ClientHandler {
+        private static void handle(PacketSyncTileAnimation packet) {
             LocalPlayer player = Minecraft.getInstance().player;
             if (player == null) return;
             Level level = player.level();
@@ -56,7 +64,6 @@ public class PacketSyncTileAnimation {
             }
             if (!(tile.renderTile instanceof TileEntityCustomModel geckoTile)) return;
             geckoTile.manualAnimName = packet.animName;
-        });
-        context.setPacketHandled(true);
+        }
     }
 }

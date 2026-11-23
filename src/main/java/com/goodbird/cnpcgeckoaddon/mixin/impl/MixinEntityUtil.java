@@ -2,7 +2,6 @@ package com.goodbird.cnpcgeckoaddon.mixin.impl;
 
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
 import com.goodbird.cnpcgeckoaddon.mixin.IDataDisplay;
-import com.goodbird.cnpcgeckoaddon.utils.NpcTextureUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import noppes.npcs.client.EntityUtil;
@@ -24,7 +23,6 @@ public class MixinEntityUtil {
             EntityNPCInterface npc = (EntityNPCInterface) copied;
             npc.noCulling = true;
             IDataDisplay display = (IDataDisplay) npc.display;
-            modelEntity.textureResLoc = NpcTextureUtils.getNpcTexture((EntityNPCInterface) copied);
             modelEntity.modelResLoc = new ResourceLocation(display.getCustomModelData().getModel());
             modelEntity.animResLoc = new ResourceLocation(display.getCustomModelData().getAnimFile());
             modelEntity.idleAnim = display.getCustomModelData().getIdleAnim();

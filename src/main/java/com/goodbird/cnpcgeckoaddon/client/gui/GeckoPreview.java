@@ -2,7 +2,6 @@ package com.goodbird.cnpcgeckoaddon.client.gui;
 
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
 import com.goodbird.cnpcgeckoaddon.registry.EntityRegistry;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
@@ -72,6 +71,8 @@ public final class GeckoPreview {
             entity.animResLoc = animationId;
         }
         entity.textureResLoc = texture;
+        entity.overlay = overlay;
+        entity.emissive = npc.display.isOverlayGlowing();
         entity.animation = GeckoLibCache.getBakedAnimations().get(animationId).animations().containsKey(animation) ? animation : "";
         if (measuredModel != baked) {
             measuredModel = baked;
@@ -98,6 +99,8 @@ public final class GeckoPreview {
         entity.yBodyRot = entity.yBodyRotO = 180 + rotation;
         entity.yHeadRot = entity.yHeadRotO = 180 + rotation;
         entity.setYRot(180 + rotation);
+        // 先提交界面背景；实体只完整绘制一次，附加材质由渲染器的 reRender 图层完成。
+        graphics.flush();
         graphics.enableScissor(x, y, x + width, y + height);
         graphics.pose().pushPose();
         try {
@@ -106,21 +109,7 @@ public final class GeckoPreview {
             graphics.pose().scale(scale, scale, scale);
             InventoryScreen.renderEntityInInventory(graphics, 0, 0, 1,
                     new Quaternionf().rotateZ((float)Math.PI), null, entity);
-            if (overlay != null) {
-                // 附加材质是同一几何的第二层贴图，用混合叠加而不是整模型重画。
-                RenderSystem.enableBlend();
-                RenderSystem.defaultBlendFunc();
-                RenderSystem.disableDepthTest();
-                entity.textureResLoc = overlay;
-                InventoryScreen.renderEntityInInventory(graphics, 0, 0, 1,
-                        new Quaternionf().rotateZ((float)Math.PI), null, entity);
-            }
         } finally {
-            entity.textureResLoc = texture;
-            if (overlay != null) {
-                RenderSystem.enableDepthTest();
-                RenderSystem.disableBlend();
-            }
             graphics.pose().popPose();
             graphics.disableScissor();
         }
@@ -160,10 +149,22 @@ public final class GeckoPreview {
         private final long started = Util.getMillis();
         private String animation = "";
         private String playing = "";
+        private ResourceLocation overlay;
+        private boolean emissive;
 
         PreviewEntity(EntityNPCInterface npc) {
             super(EntityRegistry.entityCustomModel, npc.level());
             headBoneName = "";
+        }
+
+        @Override
+        public ResourceLocation getOverlayTexture() {
+            return overlay;
+        }
+
+        @Override
+        public boolean isOverlayGlowing() {
+            return emissive;
         }
 
         @Override

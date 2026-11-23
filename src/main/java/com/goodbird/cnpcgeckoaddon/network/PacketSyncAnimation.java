@@ -6,6 +6,9 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 import noppes.npcs.entity.EntityCustomNpc;
 import software.bernie.geckolib.core.animation.RawAnimation;
@@ -81,11 +84,15 @@ public class PacketSyncAnimation {
 
     public static void handle(PacketSyncAnimation packet, Supplier<NetworkEvent.Context> ctx) {
         NetworkEvent.Context context = ctx.get();
-        context.enqueueWork(() -> {
-            // 注意：不能直接用 Minecraft.getInstance().level——该字段类型是 ClientLevel（带 @OnlyIn(CLIENT)），
-            // 专用服务器加载本类验证字节码时会触发 RuntimeDistCleaner 崩溃（"Attempted to load class ... ClientLevel for invalid dist"）。
-            // 改用 player.level()：LocalPlayer 与 Level 均无 @OnlyIn 注解，服务器可安全加载。
-            // player 在加入/离开世界窗口时为 null（旧存档崩溃修复），必须先判空。
+        context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientHandler.handle(packet)));
+        context.setPacketHandled(true);
+    }
+
+    /** 独立客户端类，公共包注册和服务端处理不会解析Minecraft玩家类型。 */
+    @OnlyIn(Dist.CLIENT)
+    private static class ClientHandler {
+        private static void handle(PacketSyncAnimation packet) {
+            // 加入/离开世界时玩家可能为空，保留原缓存补播行为。
             LocalPlayer player = Minecraft.getInstance().player;
             if (player == null) {
                 // 玩家还没进世界：先缓存，等进入后由实体 tick 补放
@@ -100,7 +107,6 @@ public class PacketSyncAnimation {
             PENDING.remove(packet.id);
             // 按优先级仲裁：低优先级动画（如攻击）不会打断正在播放的脚本/死亡动画
             entityCustomModel.requestManualAnim(packet.animName, packet.instant, packet.priority);
-        });
-        context.setPacketHandled(true);
+        }
     }
 }
