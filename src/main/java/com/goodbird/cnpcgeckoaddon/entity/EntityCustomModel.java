@@ -154,19 +154,11 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
     }
 
     // ==================== 每实体独立动画时间轴 ====================
-    // GeoModel 的 animTime / lastGameTickTime 是实例字段，而 ModelCustom 全局只有一个实例
-    // （RenderCustomModel 构造时 new ModelCustom()），所以所有 Gecko NPC 本来共用同一条时间轴。
-    // 而 getTick() 返回的是各自宿主的 owner.tickCount（跨模型实体重建保持稳定，不能改）。
-    // 两者叠加的后果：NPC A 把 animTime 推到自己的 tickCount，NPC B 渲染时又按自己的
-    // tickCount 拉回去，animTime 在多个 NPC 之间反复跳变、失去单调性。
-    // seekTime 一旦不单调，AnimationController 的 adjustedTick 就会乱跳，
-    // 一次性长动画极易撞上 adjustedTick >= length() 被判「播完」而中途消失
-    // （越长的动画窗口越大、越容易中招；玩家离远后渲染频率下降、交错模式被打乱，
-    //  正是「离远 + 10 秒以上动画」这个复现条件的由来）。
-    // 解法：每个模型实体自己存一份，由 ModelCustom.handleAnimations 在调用前后换入/换出。
-    /** 本实体自己的 animTime。NaN 表示尚未初始化（首次渲染时以 GeoModel 现值为起点）。 */
+    // 4.8.5 原生使用每实例 AnimatableManager，不再换入/换出 GeoModel 的旧时间字段。
+    // 保留公开字段供原动画逻辑使用；getTick() 仍取宿主 owner.tickCount，不能改回影子实体时间。
+    /** 本实例实际动画 tick，首次动画回调前为 NaN；看门狗与控制器共用此时间。 */
     public double ownAnimTime = Double.NaN;
-    /** 本实体自己的 lastGameTickTime。 */
+    /** 保留旧公开字段，记录本实例 AnimatableManager 的最近更新时间。 */
     public double ownLastGameTickTime = Double.NaN;
 
     // 注：曾在此加过「一次性动画未播完不许同级覆盖」的保护（manualAnimEndsAt），
@@ -260,6 +252,8 @@ public class EntityCustomModel extends Animal implements GeoAnimatable, GeoEntit
     }
 
     private PlayState predicateMovement(AnimationState<EntityCustomModel> event) {
+        // 4.8.5 的原生时间轴可能从宿主已有 tick 起算，先同步本帧，避免看门狗首帧误超时。
+        ownAnimTime = event.getAnimationTick();
         AnimationController<?> controller = event.getController();
         if (needsAnimResync) {
             // A reset happened while this model entity was kept alive: throw away every
