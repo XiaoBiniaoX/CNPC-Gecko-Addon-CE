@@ -13,12 +13,7 @@ public class CNPCHookLoader extends HookLoader {
     }
 
     boolean isServer(){
-        try{
-            Class.forName("com.goodbird.cnpcgeckoaddon.utils.ClientOnlyClass");
-        } catch (ClassNotFoundException e) {
-            return true;
-        }
-        return false;
+        return net.minecraftforge.fml.relauncher.FMLLaunchHandler.side().isServer();
     }
 
     @Override

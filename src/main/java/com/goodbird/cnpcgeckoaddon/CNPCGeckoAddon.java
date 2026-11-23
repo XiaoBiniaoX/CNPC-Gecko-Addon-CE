@@ -7,7 +7,7 @@ import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 
 @Mod(modid = CNPCGeckoAddon.MODID,
         name = "CNPC-Gecko-Addon",
-        version = "1.0.1",
+        version = "2.0.0",
         dependencies = "required-after:customnpcs;required-after:geckolib3")
 
 public class CNPCGeckoAddon {

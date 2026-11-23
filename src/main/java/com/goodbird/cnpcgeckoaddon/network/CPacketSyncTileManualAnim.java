@@ -3,7 +3,6 @@ package com.goodbird.cnpcgeckoaddon.network;
 import com.goodbird.cnpcgeckoaddon.tile.TileEntityCustomModel;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
-import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
@@ -80,14 +79,7 @@ public class CPacketSyncTileManualAnim implements IMessage, IMessageHandler<CPac
 
     @Override
     public IMessage onMessage(CPacketSyncTileManualAnim message, MessageContext ctx) {
-        TileEntity entity = Minecraft.getMinecraft().world.getTileEntity(message.pos);
-        if(!(entity instanceof TileScripted)) return null;
-        TileScripted tile = (TileScripted) entity;
-        if(tile.renderTile==null){
-            tile.renderTile = new TileEntityCustomModel();
-        }
-        TileEntityCustomModel geckoTile = (TileEntityCustomModel) tile.renderTile;
-        geckoTile.manualAnim = message.builder;
+        if (ctx.side.isClient()) com.goodbird.cnpcgeckoaddon.CNPCGeckoAddon.proxy.handleTileAnimation(message);
         return null;
     }
 }

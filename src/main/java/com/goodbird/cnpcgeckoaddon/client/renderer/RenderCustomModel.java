@@ -22,7 +22,11 @@ import java.util.ArrayList;
 public class RenderCustomModel extends GeoEntityRendererCompat<EntityCustomModel> {
 
     public RenderCustomModel(RenderManager renderManager) {
-        super(renderManager, new ModelCustom());
+        this(renderManager, new ModelCustom());
+    }
+
+    public RenderCustomModel(RenderManager renderManager, ModelCustom model) {
+        super(renderManager, model);
     }
 
     @Override
@@ -42,6 +46,40 @@ public class RenderCustomModel extends GeoEntityRendererCompat<EntityCustomModel
             }
         }
         super.render(model, animatable, partialTicks,red,green,blue,alpha);
+        ResourceLocation overlay = animatable.getOverlayTexture();
+        if (overlay == null) return;
+        // IGeoRenderer.render has submitted the main buffer, but the entity pose
+        // is still active here. Draw only geometry, without items or animation updates.
+        float lightX = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessX;
+        float lightY = net.minecraft.client.renderer.OpenGlHelper.lastBrightnessY;
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_POLYGON_BIT | GL11.GL_TEXTURE_BIT | GL11.GL_CURRENT_BIT);
+        try {
+            // Raw GL inside push/pop avoids desynchronizing GlStateManager's cache.
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glEnable(GL11.GL_ALPHA_TEST);
+            GL11.glAlphaFunc(GL11.GL_GREATER, 0.003921569F);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthFunc(GL11.GL_LEQUAL);
+            GL11.glDepthMask(false);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glEnable(org.lwjgl.opengl.GL12.GL_RESCALE_NORMAL);
+            GL11.glEnable(GL11.GL_POLYGON_OFFSET_FILL);
+            GL11.glPolygonOffset(-1F, -10F);
+            if (animatable.isOverlayGlowing()) {
+                GL11.glDisable(GL11.GL_LIGHTING);
+                net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, 240F, 240F);
+            }
+            Minecraft.getMinecraft().getTextureManager().bindTexture(overlay);
+            BufferBuilder buffer = net.minecraft.client.renderer.Tessellator.getInstance().getBuffer();
+            buffer.begin(GL11.GL_QUADS, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION_TEX_COLOR_NORMAL);
+            for (GeoBone bone : model.topLevelBones) renderRecursively(buffer, bone, 1F, 1F, 1F, alpha);
+            net.minecraft.client.renderer.Tessellator.getInstance().draw();
+        } finally {
+            net.minecraft.client.renderer.OpenGlHelper.setLightmapTextureCoords(net.minecraft.client.renderer.OpenGlHelper.lightmapTexUnit, lightX, lightY);
+            GL11.glPopAttrib();
+            Minecraft.getMinecraft().getTextureManager().bindTexture(getEntityTexture(animatable));
+        }
     }
 
     protected void applyRotations(EntityCustomModel entityLiving, float ageInTicks, float rotationYaw, float partialTicks) {

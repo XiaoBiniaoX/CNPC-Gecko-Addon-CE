@@ -23,6 +23,7 @@ public class CustomModelData implements ICustomModelData {
     private float width = 0.7f;
     private float height = 2f;
     private boolean enableHurtTint = true;
+    private boolean overlayGlowing = true;
 
     private String[] attackAnimNames = new String[MAX_ATTACKS];
     private int[] attackWeights = new int[MAX_ATTACKS];
@@ -74,6 +75,7 @@ public class CustomModelData implements ICustomModelData {
         nbttagcompound.setFloat("Width",width);
         nbttagcompound.setFloat("Height",height);
         nbttagcompound.setBoolean("EnableHurtTint",enableHurtTint);
+        nbttagcompound.setBoolean("OverlayGlowing", overlayGlowing);
 
         nbttagcompound.setInteger("AttackCount", Math.min(attackCount, MAX_ATTACKS));
         NBTTagList attackNamesList = new NBTTagList();
@@ -127,6 +129,8 @@ public class CustomModelData implements ICustomModelData {
     }
 
     public void readFromNBT(NBTTagCompound nbttagcompound) {
+        // This CNPC version predates the display flag; keep the same key/default.
+        overlayGlowing = !nbttagcompound.hasKey("OverlayGlowing") || nbttagcompound.getBoolean("OverlayGlowing");
         if(nbttagcompound.hasKey("Model")) {
             model = nbttagcompound.getString("Model");
             animFile = nbttagcompound.getString("AnimFile");
@@ -255,6 +259,8 @@ public class CustomModelData implements ICustomModelData {
 
     public boolean isHurtTintEnabled(){ return enableHurtTint; }
     public void setEnableHurtTint(boolean value){ this.enableHurtTint = value; }
+    public boolean isOverlayGlowing() { return overlayGlowing; }
+    public void setOverlayGlowing(boolean value) { overlayGlowing = value; }
 
     public int getAttackCount() { return attackCount; }
     public String[] getAttackAnimNames() { return attackAnimNames; }

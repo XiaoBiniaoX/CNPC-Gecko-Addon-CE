@@ -10,7 +10,6 @@ import com.goodbird.cnpcgeckoaddon.network.CPacketSyncTileManualAnim;
 import com.goodbird.cnpcgeckoaddon.network.NetworkWrapper;
 import com.goodbird.cnpcgeckoaddon.network.PacketSyncAnimation;
 import com.goodbird.cnpcgeckoaddon.tile.TileEntityCustomModel;
-import com.goodbird.cnpcgeckoaddon.utils.NpcTextureUtils;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.item.ItemStack;
@@ -250,7 +249,6 @@ public class CommonHooks {
 
 
 
-            modelEntity.textureResLoc = NpcTextureUtils.getNpcTexture((EntityNPCInterface) copied);
             modelEntity.modelResLoc = new ResourceLocation(data.getModel());
             modelEntity.animResLoc = new ResourceLocation(data.getAnimFile());
             modelEntity.idleAnimName = data.getIdleAnim();

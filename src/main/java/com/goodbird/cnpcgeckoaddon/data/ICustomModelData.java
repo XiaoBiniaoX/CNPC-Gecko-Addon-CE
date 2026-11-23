@@ -42,6 +42,9 @@ public interface ICustomModelData {
     boolean isHurtTintEnabled();
     void setEnableHurtTint(boolean value);
 
+    boolean isOverlayGlowing();
+    void setOverlayGlowing(boolean value);
+
     // Attack animation arrays
     int getAttackCount();
     String[] getAttackAnimNames();

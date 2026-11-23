@@ -36,4 +36,7 @@ public class CommonProxy {
     public World getWorldById(int id){
         return FMLCommonHandler.instance().getMinecraftServerInstance().worlds[id];
     }
+
+    public void handleAnimation(com.goodbird.cnpcgeckoaddon.network.PacketSyncAnimation message) {}
+    public void handleTileAnimation(com.goodbird.cnpcgeckoaddon.network.CPacketSyncTileManualAnim message) {}
 }

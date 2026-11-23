@@ -57,6 +57,15 @@ public class EntityCustomModel extends EntityCreature implements IAnimatable, IA
     public int deathAnimCount = 0;
 
     public EntityLivingBase npcRef = null;
+    public ResourceLocation getOverlayTexture() {
+        if (!(npcRef instanceof noppes.npcs.entity.EntityNPCInterface)) return null;
+        String texture = ((noppes.npcs.entity.EntityNPCInterface) npcRef).display.getOverlayTexture();
+        return texture.isEmpty() ? null : new ResourceLocation(texture);
+    }
+
+    public boolean isOverlayGlowing() {
+        return npcRef == null || npcRef.getCapability(com.goodbird.cnpcgeckoaddon.data.CustomModelDataProvider.DATA_CAP, null).isOverlayGlowing();
+    }
     private int prevHurtTime = 0;
     private boolean wasSwinging = false;
     private boolean deathTriggered = false;

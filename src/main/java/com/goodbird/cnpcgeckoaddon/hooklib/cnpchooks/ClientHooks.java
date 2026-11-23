@@ -1,7 +1,8 @@
 package com.goodbird.cnpcgeckoaddon.hooklib.cnpchooks;
 
 import com.goodbird.cnpcgeckoaddon.client.gui.GuiModelAnimation;
-import com.goodbird.cnpcgeckoaddon.client.gui.GuiStringSelection;
+import com.goodbird.cnpcgeckoaddon.client.gui.GuiGeckoEditor;
+import com.goodbird.cnpcgeckoaddon.client.gui.GeckoPreview;
 import com.goodbird.cnpcgeckoaddon.client.gui.SubGuiModelExtras;
 import com.goodbird.cnpcgeckoaddon.data.CustomModelDataProvider;
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
@@ -36,7 +37,6 @@ import software.bernie.geckolib3.core.IAnimatable;
 import software.bernie.geckolib3.core.builder.AnimationBuilder;
 import software.bernie.geckolib3.resource.GeckoLibCache;
 
-import java.util.Vector;
 @SideOnly(Side.CLIENT)
 public class ClientHooks {
     @Hook(returnCondition = ReturnCondition.ON_TRUE)
@@ -79,16 +79,7 @@ public class ClientHooks {
     public static void initGui(GuiCreationEntities gui) {
         EntityNPCInterface npc = gui.npc;
         if (npc instanceof EntityCustomNpc && ((EntityCustomNpc) npc).modelData.getEntity(npc) instanceof EntityCustomModel) {
-            EntityCustomModel customModel = (EntityCustomModel) ((EntityCustomNpc) npc).modelData.getEntity(npc);
-            Vector<String> list = new Vector<>();
-            for (ResourceLocation resLoc : GeckoLibCache.getInstance().getGeoModels().keySet()) {
-                list.add(resLoc.toString());
-            }
-            gui.addLabel(new GuiNpcLabel(212, I18n.format("cnpcgeckoaddon.gui.model"), gui.guiLeft + 124, gui.guiTop + 26, 0xffffff));
-            gui.addButton(new GuiNpcButton(202, gui.guiLeft + 160, gui.guiTop + 20, 150, 20, customModel.modelResLoc.getResourcePath()));
-            gui.addLabel(new GuiNpcLabel(213, I18n.format("cnpcgeckoaddon.gui.model_animation"), gui.guiLeft + 124, gui.guiTop + 46, 0xffffff));
-            gui.addButton(new GuiNpcButton(212, gui.guiLeft + 210, gui.guiTop + 40, 100, 20, "cnpcgeckoaddon.gui.select"));
-            gui.addButton(new GuiNpcButton(213, gui.guiLeft + 124, gui.guiTop + 60, 187, 20, "cnpcgeckoaddon.gui.extras"));
+            gui.addButton(new GuiNpcButton(202, gui.guiLeft + 124, gui.guiTop + 26, 187, 20, "cnpcgeckoaddon.gui.editor"));
         }
     }
 
@@ -96,14 +87,7 @@ public class ClientHooks {
     @SideOnly(Side.CLIENT)
     public static void actionPerformed(GuiCreationEntities gui, GuiButton btn) {
         if (btn.id == 202) {
-            Vector<String> list = new Vector<>();
-            for (ResourceLocation resLoc : GeckoLibCache.getInstance().getGeoModels().keySet()) {
-                list.add(resLoc.toString());
-            }
-            NoppesUtil.openGUI(Minecraft.getMinecraft().player, new GuiStringSelection(gui, I18n.format("cnpcgeckoaddon.gui.select_model"), list, name -> {
-                gui.npc.getCapability(CustomModelDataProvider.DATA_CAP, null).setModel(name);
-                gui.getButton(202).setDisplayText(name);
-            }));
+            NoppesUtil.openGUI(Minecraft.getMinecraft().player, new GuiGeckoEditor(gui, gui.npc, 0));
         }
         if (btn.id == 212) {
             NoppesUtil.openGUI(Minecraft.getMinecraft().player, new GuiModelAnimation(gui, gui.npc));
@@ -111,6 +95,27 @@ public class ClientHooks {
         if(btn.id == 213){
             NoppesUtil.openGUI(Minecraft.getMinecraft().player, new SubGuiModelExtras(gui, gui.npc));
         }
+    }
+
+    @Hook(injectOnExit = true)
+    public static void Copy(noppes.npcs.client.EntityUtil cl, net.minecraft.entity.EntityLivingBase copied, net.minecraft.entity.EntityLivingBase entity) {
+        if (entity instanceof EntityCustomModel && copied instanceof EntityNPCInterface) {
+            ((EntityCustomModel)entity).textureResLoc = com.goodbird.cnpcgeckoaddon.utils.NpcTextureUtils.getNpcTexture((EntityNPCInterface)copied);
+        }
+    }
+
+    private static final java.util.Map<noppes.npcs.client.gui.util.GuiNPCInterface, GeckoPreview> previews = new java.util.WeakHashMap<>();
+
+    @Hook(returnCondition = ReturnCondition.ON_TRUE)
+    public static boolean drawNpc(noppes.npcs.client.gui.util.GuiNPCInterface gui, net.minecraft.entity.EntityLivingBase entity, int x, int y, float zoom, int rotation) {
+        if (!(gui instanceof noppes.npcs.client.gui.model.GuiCreationScreenInterface) || !(entity instanceof EntityCustomModel)) return false;
+        if (gui.hasSubGui()) return true;
+        GeckoPreview preview = previews.computeIfAbsent(gui, key -> new GeckoPreview(gui.npc));
+        com.goodbird.cnpcgeckoaddon.data.ICustomModelData data = gui.npc.getCapability(CustomModelDataProvider.DATA_CAP, null);
+        String overlay = gui.npc.display.getOverlayTexture();
+        preview.render(gui.guiLeft + 124, gui.guiTop + 50, gui.xSize - 128, 154, gui.npc, data.getModel(), data.getAnimFile(),
+                com.goodbird.cnpcgeckoaddon.utils.NpcTextureUtils.getNpcTexture(gui.npc), overlay.isEmpty() ? null : new ResourceLocation(overlay), data.getIdleAnim(), rotation, 1);
+        return true;
     }
 
     @Hook(targetMethod = "render", returnCondition = ReturnCondition.ON_TRUE)

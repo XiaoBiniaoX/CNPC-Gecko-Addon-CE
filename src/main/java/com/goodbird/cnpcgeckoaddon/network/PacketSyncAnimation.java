@@ -2,7 +2,6 @@ package com.goodbird.cnpcgeckoaddon.network;
 
 import com.goodbird.cnpcgeckoaddon.entity.EntityCustomModel;
 import io.netty.buffer.ByteBuf;
-import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
@@ -85,16 +84,7 @@ public class PacketSyncAnimation implements IMessage, IMessageHandler<PacketSync
 
     @Override
     public IMessage onMessage(PacketSyncAnimation message, MessageContext ctx) {
-        Entity entity = Minecraft.getMinecraft().world.getEntityByID(message.entityId);
-        if(!(entity instanceof EntityCustomNpc)) return null;
-        EntityCustomNpc npc = (EntityCustomNpc) entity;
-        if(npc.modelData==null || !(npc.modelData.getEntity(npc) instanceof EntityCustomModel)) return null;
-        EntityCustomModel entityCustomModel = (EntityCustomModel) npc.modelData.getEntity(npc);
-        if (message.asHurt) {
-            entityCustomModel.hurtAnim = message.builder;
-        } else {
-            entityCustomModel.manualAnim = message.builder;
-        }
+        if (ctx.side.isClient()) com.goodbird.cnpcgeckoaddon.CNPCGeckoAddon.proxy.handleAnimation(message);
         return null;
     }
 }

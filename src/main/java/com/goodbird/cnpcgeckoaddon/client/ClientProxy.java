@@ -32,4 +32,32 @@ public class ClientProxy  extends CommonProxy {
     public World getWorldById(int id){
         return Minecraft.getMinecraft().world;
     }
+
+    @Override
+    public void handleAnimation(com.goodbird.cnpcgeckoaddon.network.PacketSyncAnimation message) {
+        Minecraft mc = Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> {
+            if (mc.world == null) return;
+            net.minecraft.entity.Entity entity = mc.world.getEntityByID(message.entityId);
+            if (!(entity instanceof noppes.npcs.entity.EntityCustomNpc)) return;
+            noppes.npcs.entity.EntityCustomNpc npc = (noppes.npcs.entity.EntityCustomNpc) entity;
+            if (!(npc.modelData.getEntity(npc) instanceof EntityCustomModel)) return;
+            EntityCustomModel model = (EntityCustomModel) npc.modelData.getEntity(npc);
+            if (message.asHurt) model.hurtAnim = message.builder;
+            else model.manualAnim = message.builder;
+        });
+    }
+
+    @Override
+    public void handleTileAnimation(com.goodbird.cnpcgeckoaddon.network.CPacketSyncTileManualAnim message) {
+        Minecraft mc = Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> {
+            if (mc.world == null) return;
+            net.minecraft.tileentity.TileEntity entity = mc.world.getTileEntity(message.pos);
+            if (!(entity instanceof noppes.npcs.blocks.tiles.TileScripted)) return;
+            noppes.npcs.blocks.tiles.TileScripted tile = (noppes.npcs.blocks.tiles.TileScripted) entity;
+            if (tile.renderTile == null) tile.renderTile = new TileEntityCustomModel();
+            if (tile.renderTile instanceof TileEntityCustomModel) ((TileEntityCustomModel) tile.renderTile).manualAnim = message.builder;
+        });
+    }
 }
